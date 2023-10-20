@@ -1,5 +1,4 @@
-include("../src/SUNDMRG.jl")
-using .SUNDMRG
+using SUNDMRG
 using JLD2
 
 function main()
