@@ -22,11 +22,11 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     Sx = sys_tensor_dict_hold[x]
                 else
                     len = length(sys_αs)
-                    if engine <: GPUEngine
-                        Sx = [CuArray.(sys_tensor_dict[x][i, j]) for i in 1 : len, j in 1 : len]
-                    else
-                        Sx = sys_tensor_dict[x]
-                    end
+                    # if engine <: GPUEngine
+                    #     Sx = [CuArray.(sys_tensor_dict[x][i, j]) for i in 1 : len, j in 1 : len]
+                    # else
+                    Sx = sys_tensor_dict[x]
+                    # end
                 end
                 if engine <: GPUEngine
                     Stemp = [[CUDA.zeros(Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
@@ -37,7 +37,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     @. Stemp[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * Sx[e.ki, e.kj][e.τ2]
                 end
             end
-            tensor_dict[x] = map(k -> isempty(Stemp[k...]) ? Matrix{Float64}[] : [Array(transformation_matrix[k[1]]' * (M * transformation_matrix[k[2]])) for M in Stemp[k...]], [(ki, kj) for ki in 1 : sys_len, kj in 1 : sys_len])
+            tensor_dict[x] = map(k -> isempty(Stemp[k...]) ? (engine <: GPUEngine ? CuMatrix{Float64}[] : Matrix{Float64}[]) : [transformation_matrix[k[1]]' * (M * transformation_matrix[k[2]]) for M in Stemp[k...]], [(ki, kj) for ki in 1 : sys_len, kj in 1 : sys_len])
         end
 
         if correlation == :nn
@@ -150,11 +150,11 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                         Sx2 = env_tensor_dict_hold[x]
                     else
                         len = length(env_αs)
-                        if engine <: GPUEngine
-                            Sx2 = [CuArray.(env_tensor_dict[x][i, j]) for i in 1 : len, j in 1 : len]
-                        else
-                            Sx2 = env_tensor_dict[x]
-                        end
+                        # if engine <: GPUEngine
+                        #     Sx2 = [CuArray.(env_tensor_dict[x][i, j]) for i in 1 : len, j in 1 : len]
+                        # else
+                        Sx2 = env_tensor_dict[x]
+                        # end
                     end
                     if engine <: GPUEngine
                         env_S = [[CUDA.zeros(Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
@@ -251,11 +251,11 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                             Sy = env_tensor_dict_hold[y]
                         else
                             len = length(env_αs)
-                            if engine <: GPUEngine
-                                Sy = [CuArray.(env_tensor_dict[y][i, j]) for i in 1 : len, j in 1 : len]
-                            else
-                                Sy = env_tensor_dict[y]
-                            end
+                            # if engine <: GPUEngine
+                            #     Sy = [CuArray.(env_tensor_dict[y][i, j]) for i in 1 : len, j in 1 : len]
+                            # else
+                            Sy = env_tensor_dict[y]
+                            # end
                         end
                         if engine <: GPUEngine
                             env_S = [[CUDA.zeros(Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]

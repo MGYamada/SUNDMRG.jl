@@ -313,11 +313,11 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
             end
 
             if y ∈ last.(bonds_hold)
-                if engine <: GPUEngine
-                    env_tensor_dict_hold[y] =  [CuArray.(Sold[i, j]) for i in 1 : len, j in 1 : len]
-                else
-                    env_tensor_dict_hold[y] =  Sold
-                end
+                # if engine <: GPUEngine
+                #     env_tensor_dict_hold[y] =  [CuArray.(Sold[i, j]) for i in 1 : len, j in 1 : len]
+                # else
+                env_tensor_dict_hold[y] =  Sold
+                # end
             end
         end
     end
@@ -402,11 +402,12 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
     if engine <: GPUEngine
         newblock_enl = EnlargedBlockGPU{Nc}[]
         trmat = Vector{CuMatrix{Float64}}[]
+        newtensor_dict = Dict{Int64, Matrix{Vector{CuMatrix{Float64}}}}[]
     else
         newblock_enl = EnlargedBlockCPU{Nc}[]
         trmat = Vector{Matrix{Float64}}[]
+        newtensor_dict = Dict{Int64, Matrix{Vector{Matrix{Float64}}}}[]
     end
-    newtensor_dict = Dict{Int64, Matrix{Vector{Matrix{Float64}}}}[]
 
     ee = Float64[]
     es = Dict{SUNIrrep{Nc}, Vector{Float64}}[]
@@ -542,11 +543,11 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
                             Sx = sys_tensor_dict_hold[x]
                         else
                             temp_len = length(sys_αs)
-                            if engine <: GPUEngine
-                                Sx = [CuArray.(sys_tensor_dict[x][i, j]) for i in 1 : temp_len, j in 1 : temp_len]
-                            else
-                                Sx = sys_tensor_dict[x]
-                            end
+                            # if engine <: GPUEngine
+                            #     Sx = [CuArray.(sys_tensor_dict[x][i, j]) for i in 1 : temp_len, j in 1 : temp_len]
+                            # else
+                            Sx = sys_tensor_dict[x]
+                            # end
                         end
                         if engine <: GPUEngine
                             Stemp = [[CUDA.zeros(Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
@@ -561,11 +562,11 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
                             Sx = env_tensor_dict_hold[x]
                         else
                             temp_len = length(env_αs)
-                            if engine <: GPUEngine
-                                Sx = [CuArray.(env_tensor_dict[x][i, j]) for i in 1 : temp_len, j in 1 : temp_len]
-                            else
-                                Sx = env_tensor_dict[x]
-                            end
+                            # if engine <: GPUEngine
+                            #     Sx = [CuArray.(env_tensor_dict[x][i, j]) for i in 1 : temp_len, j in 1 : temp_len]
+                            # else
+                            Sx = env_tensor_dict[x]
+                            # end
                         end
                         if engine <: GPUEngine
                             Stemp = [[CUDA.zeros(Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
