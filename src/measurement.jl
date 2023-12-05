@@ -3,7 +3,7 @@ tensor_dict, Sj = measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, 
 measurement phase
 """
 function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y_conn, sys_connS, env_connS, sys_len, env_len, sys_tensor_dict, env_tensor_dict, sys_tensor_dict_hold, env_tensor_dict_hold, sys_αs, env_αs, sys_βs, env_βs, sys_dp, env_dp, sys_ms, env_ms, sys_enlarge, env_enlarge, superblock_H2, OM, Ψ0, transformation_matrix, comm, rank, Ncpu, engine; correlation = :none, margin = 0, lattice = :square, Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0))
-    tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
+    tensor_dict = engine <: GPUEngine ? Dict{Int, Matrix{Vector{CuMatrix{Float64}}}}() : Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
 
     for x in 1 : min(sys_enl.length, Ly)
         if rank == 0 && (lattice != :honeycombZC || x == x_conn || ((mod1(sys.length, 2Ly) <= Ly) ? x == 1 : x == Ly) || (x <= x_conn ? iseven(x) : isodd(x)))
