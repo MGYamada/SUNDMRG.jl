@@ -245,11 +245,11 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
                         end
                     end
 
-                    # if engine <: GPUEngine
-                    #     Snew = [CUSPARSE.CuSparseMatrixCSC.(Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
-                    # else
-                    Snew = Stemp
-                    # end
+                    if engine <: GPUEngine
+                        Snew = [CuArray.(Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
+                    else
+                        Snew = Stemp
+                    end
 
                     if fileio
                         if engine <: GPUEngine
@@ -267,7 +267,7 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
 
                     lennew = length(env_trmat)
                     ms = map(k -> size(env_trmat[k], 2), 1 : lennew)
-                    Sold = map(k -> isempty(Snew[k...]) ? Matrix{Float64}[] : [env_trmat[k[1]]' * (M * env_trmat[k[2]]) for M in Snew[k...]], [(ki, kj) for ki in 1 : lennew, kj in 1 : lennew])
+                    Sold = map(k -> isempty(Snew[k...]) ? (engine <: GPUEngine ? CuMatrix{Float64}[] : Matrix{Float64}[]) : [env_trmat[k[1]]' * (M * env_trmat[k[2]]) for M in Snew[k...]], [(ki, kj) for ki in 1 : lennew, kj in 1 : lennew])
 
                     for x in z + 1 : env.length
                         if engine <: GPUEngine
