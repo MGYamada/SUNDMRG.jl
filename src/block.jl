@@ -30,7 +30,7 @@ struct EnlargedBlockGPU{Nc} <: EnlargedBlock{Nc}
     mβ_list::Vector{Int}
     mαβ::Matrix{Int}
     scalar_dict::Dict{Symbol, Vector{CuMatrix{Float64}}}
-    tensor_dict::Dict{Int, Matrix{Vector{Matrix{Float64}}}} # fix later
+    tensor_dict::Dict{Int, Matrix{Vector{CuMatrix{Float64}}}}
 end
 
 """
@@ -55,7 +55,7 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
     end
 
     zy = (x -> x <= Ly ? x : 2Ly + 1 - x)(mod1(block.length + 1, 2Ly))
-    tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
+    tensor_dict = engine <: GPUEngine ? Dict{Int, Matrix{Vector{CuMatrix{Float64}}}}() : Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
     if rank == 0
         fac1 = sqrt((Nc ^ 2 - 1) / Nc)
         dp = [directproduct(βs[j], adjoint) for j in 1 : lenβ]
@@ -125,11 +125,11 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
                                     coeff = on_the_fly ? on_the_fly_calc3(Nc, (αs[j], βs[k], αs[i])) : tables[3][αs[j], βs[k], αs[i]]
                                     for τ1 in 1 : o1
                                         temp2 = fac2 * coeff[τ1]
-                                        if engine <: GPUEngine
-                                            temp3 = CuArray(block_tensor_dict[z][i, j][τ1])
-                                        else
-                                            temp3 = block_tensor_dict[z][i, j][τ1]
-                                        end
+                                        # if engine <: GPUEngine
+                                        #     temp3 = CuArray(block_tensor_dict[z][i, j][τ1])
+                                        # else
+                                        temp3 = block_tensor_dict[z][i, j][τ1]
+                                        # end
                                         @. rtn[cum_mαβ[i, k] + 1 : cum_mαβ[i + 1, k], cum_mαβ[j, k] + 1 : cum_mαβ[j + 1, k]] += temp2 * temp3
                                     end
                                 end
@@ -183,7 +183,7 @@ env_tensor_dict = spin_operators!(tensor_table, env, env_label, Ly, widthmax, si
 generates spin operators for the environment
 """
 function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = :square) where Nc
-    env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
+    env_tensor_dict = engine <: GPUEngine ? Dict{Int, Matrix{Vector{CuMatrix{Float64}}}}() : Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
     y_conn = (x -> x <= Ly ? x : 2Ly + 1 - x)(mod1(env.length, 2Ly))
     for y in 1 : min(env.length, Ly)
         if lattice != :honeycombZC || y == y_conn || ((mod1(env.length, 2Ly) <= Ly) ? y == 1 : y == Ly) || (y <= y_conn ? iseven(y) : isodd(y))
