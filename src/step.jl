@@ -216,20 +216,20 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
     end
 
     if x_conn ∈ first.(bonds_hold)
-        if engine <: GPUEngine
-            sys_connS = [@. CUSPARSE.CuSparseMatrixCSC(sys_enl.tensor_dict[x_conn][i, j]) for i in 1 : sys_len, j in 1 : sys_len]
-        else
-            sys_connS = sys_enl.tensor_dict[x_conn]
-        end
+        # if engine <: GPUEngine
+        #     sys_connS = [@. CUSPARSE.CuSparseMatrixCSC(sys_enl.tensor_dict[x_conn][i, j]) for i in 1 : sys_len, j in 1 : sys_len]
+        # else
+        sys_connS = sys_enl.tensor_dict[x_conn]
+        # end
     else
         sys_connS = nothing
     end
     if y_conn ∈ last.(bonds_hold)
-        if engine <: GPUEngine
-            env_connS = [@. CUSPARSE.CuSparseMatrixCSC(env_enl.tensor_dict[y_conn][i, j]) for i in 1 : env_len, j in 1 : env_len]
-        else
-            env_connS = env_enl.tensor_dict[y_conn]
-        end
+        # if engine <: GPUEngine
+        #     env_connS = [@. CUSPARSE.CuSparseMatrixCSC(env_enl.tensor_dict[y_conn][i, j]) for i in 1 : env_len, j in 1 : env_len]
+        # else
+        env_connS = env_enl.tensor_dict[y_conn]
+        # end
     else
         env_connS = nothing
     end
@@ -517,21 +517,21 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
                 if x == conn
                     if switch == 1
                         if isnothing(sys_connS)
-                            if engine <: GPUEngine
-                                Stemp = [@. CUSPARSE.CuSparseMatrixCSC(sys_enl.tensor_dict[x_conn][i, j]) for i in 1 : sys_len, j in 1 : sys_len]
-                            else
-                                Stemp = sys_enl.tensor_dict[x_conn]
-                            end
+                            # if engine <: GPUEngine
+                            #     Stemp = [@. CUSPARSE.CuSparseMatrixCSC(sys_enl.tensor_dict[x_conn][i, j]) for i in 1 : sys_len, j in 1 : sys_len]
+                            # else
+                            Stemp = sys_enl.tensor_dict[x_conn]
+                            # end
                         else
                             Stemp = sys_connS
                         end
                     else
                         if isnothing(env_connS)
-                            if engine <: GPUEngine
-                                Stemp = [@. CUSPARSE.CuSparseMatrixCSC(env_enl.tensor_dict[y_conn][i, j]) for i in 1 : env_len, j in 1 : env_len]
-                            else
-                                Stemp = env_enl.tensor_dict[y_conn]
-                            end
+                            # if engine <: GPUEngine
+                            #     Stemp = [@. CUSPARSE.CuSparseMatrixCSC(env_enl.tensor_dict[y_conn][i, j]) for i in 1 : env_len, j in 1 : env_len]
+                            # else
+                            Stemp = env_enl.tensor_dict[y_conn]
+                            # end
                         else
                             Stemp = env_connS
                         end
