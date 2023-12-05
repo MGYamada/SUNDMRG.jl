@@ -61,6 +61,7 @@ The value has to become zero or a negligibly small value in the last few sweeps.
 
 ## TODO
 
+* Type piracy in lanczos.jl
 * Hybrid parallelization
 * Supporting the triangular lattice
 * Thick-restart Lanczos

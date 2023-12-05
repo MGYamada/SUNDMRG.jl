@@ -1,7 +1,7 @@
 const tol_wavefunction = 1e-13
 const tol_Lanczos = 1e-13
 
-MyMatrix = Union{Matrix{Vector{Matrix{Float64}}}, Matrix{Vector{CuMatrix{Float64, Union{Mem.DeviceBuffer, Mem.HostBuffer, Mem.UnifiedBuffer}}}}} # I am not sure whether this is a good hack
+MyMatrix = Union{Matrix{Vector{Matrix{Float64}}}, Matrix{Vector{CuMatrix{Float64, Mem.DeviceBuffer}}}, Matrix{Vector{CuMatrix{Float64, Mem.HostBuffer}}}, Matrix{Vector{CuMatrix{Float64, Mem.UnifiedBuffer}}}} # I am not sure whether this is a good hack
 
 function LinearAlgebra.dot(x::MyMatrix, y::MyMatrix)
     s = 0.0
