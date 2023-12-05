@@ -13,6 +13,14 @@ A part of the code is influenced by Simple DMRG. https://github.com/simple-dmrg/
 * CUDA-aware MPI
 * File-IO
 
+## Installation
+
+Before `]add`, you must install `MAGMA.jl@0.1.2-`. https://github.com/MGYamada/MAGMA.jl
+After that, you can do:
+```
+]add https://github.com/MGYamada/SUNDMRG.jl.git
+```
+
 ## Usage
 
 If you want to run the simulation of the SU(2) Heisenberg model on the 4x4 square lattice
@@ -46,18 +54,15 @@ The value has to become zero or a negligibly small value in the last few sweeps.
 ## Dependency
 
 * Julia 1.6-
-* CUDA.jl 3.3.5-3.3.6
+* CUDA.jl 5.0.0-
 * MAGMA.jl 0.1.2-
 * SUNRepresentations.jl 0.1.2-
 * MPI.jl: We strongly recommend to use Open MPI.
 
 ## TODO
 
-* Supporting M1 Mac
-* Type stability
 * Hybrid parallelization
 * Supporting the triangular lattice
-* Refined recursive algorithm to compute symmetry coefficients
 * Thick-restart Lanczos
 
 ## Highly unlikely future features
@@ -65,6 +70,14 @@ The value has to become zero or a negligibly small value in the last few sweeps.
 * Supporting the kagome lattice
 * MPS formulation
 * Supporting a spin system not with a fundamental representation per site
+
+## Open Question
+
+Why do we need
+```julia
+signfactor = iseven(Nc) ? -1.0 : 1.0
+```
+in `finite.jl`?
 
 ## License
 
@@ -77,3 +90,4 @@ MIT
 * Ryan V. Mishmash
 
 Please inquire questions to Masahiko G. Yamada (@MGYamada).
+Some functions are written by @maartenvd.

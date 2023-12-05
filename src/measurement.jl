@@ -9,11 +9,11 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
         if rank == 0 && (lattice != :honeycombZC || x == x_conn || ((mod1(sys.length, 2Ly) <= Ly) ? x == 1 : x == Ly) || (x <= x_conn ? iseven(x) : isodd(x)))
             if x == x_conn
                 if isnothing(sys_connS)
-                    if engine <: GPUEngine
-                        Stemp = [@. CUSPARSE.CuSparseMatrixCSC(sys_enl.tensor_dict[x_conn][i, j]) for i in 1 : sys_len, j in 1 : sys_len]
-                    else
-                        Stemp = sys_enl.tensor_dict[x_conn]
-                    end
+                    # if engine <: GPUEngine
+                    #     Stemp = [@. CUSPARSE.CuSparseMatrixCSC(sys_enl.tensor_dict[x_conn][i, j]) for i in 1 : sys_len, j in 1 : sys_len]
+                    # else
+                    Stemp = sys_enl.tensor_dict[x_conn]
+                    # end
                 else
                     Stemp = sys_connS
                 end
@@ -54,11 +54,11 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
 
                 if rank == 0
                     if isnothing(env_connS)
-                        if engine <: GPUEngine
-                            env_S = [@. CUSPARSE.CuSparseMatrixCSC(env_enl.tensor_dict[y_conn][i, j]) for i in 1 : env_len, j in 1 : env_len]
-                        else
-                            env_S = env_enl.tensor_dict[y_conn]
-                        end 
+                        # if engine <: GPUEngine
+                        #     env_S = [@. CUSPARSE.CuSparseMatrixCSC(env_enl.tensor_dict[y_conn][i, j]) for i in 1 : env_len, j in 1 : env_len]
+                        # else
+                        env_S = env_enl.tensor_dict[y_conn]
+                        # end
                     else
                         env_S = env_connS
                     end
@@ -375,11 +375,11 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                 end
             elseif x_conn == 1 && sys.length ÷ Ly == margin
                 if isnothing(sys_connS)
-                    if engine <: GPUEngine
-                        sys_S = [@. CUSPARSE.CuSparseMatrixCSC(sys_enl.tensor_dict[x_conn][i, j]) for i in 1 : sys_len, j in 1 : sys_len]
-                    else
-                        sys_S = sys_enl.tensor_dict[x_conn]
-                    end
+                    # if engine <: GPUEngine
+                    #     sys_S = [@. CUSPARSE.CuSparseMatrixCSC(sys_enl.tensor_dict[x_conn][i, j]) for i in 1 : sys_len, j in 1 : sys_len]
+                    # else
+                    sys_S = sys_enl.tensor_dict[x_conn]
+                    # end
                 else
                     sys_S = sys_connS
                 end
@@ -393,11 +393,11 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
 
                 if rank == 0
                     if isnothing(sys_connS)
-                        if engine <: GPUEngine
-                            sys_S = [@. CUSPARSE.CuSparseMatrixCSC(sys_enl.tensor_dict[x_conn][i, j]) for i in 1 : sys_len, j in 1 : sys_len]
-                        else
-                            sys_S = sys_enl.tensor_dict[x_conn]
-                        end
+                        # if engine <: GPUEngine
+                        #     sys_S = [@. CUSPARSE.CuSparseMatrixCSC(sys_enl.tensor_dict[x_conn][i, j]) for i in 1 : sys_len, j in 1 : sys_len]
+                        # else
+                        sys_S = sys_enl.tensor_dict[x_conn]
+                        # end
                     else
                         sys_S = sys_connS
                     end
@@ -408,11 +408,11 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
 
                 if rank == 0
                     if isnothing(env_connS)
-                        if engine <: GPUEngine
-                            env_S = [@. CUSPARSE.CuSparseMatrixCSC(env_enl.tensor_dict[y_conn][i, j]) for i in 1 : env_len, j in 1 : env_len]
-                        else
-                            env_S = env_enl.tensor_dict[y_conn]
-                        end
+                        # if engine <: GPUEngine
+                        #     env_S = [@. CUSPARSE.CuSparseMatrixCSC(env_enl.tensor_dict[y_conn][i, j]) for i in 1 : env_len, j in 1 : env_len]
+                        # else
+                        env_S = env_enl.tensor_dict[y_conn]
+                        # end
                     else
                         env_S = env_connS
                     end

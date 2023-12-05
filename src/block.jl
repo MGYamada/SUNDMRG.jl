@@ -18,7 +18,7 @@ struct EnlargedBlockCPU{Nc} <: EnlargedBlock{Nc}
     mβ_list::Vector{Int}
     mαβ::Matrix{Int}
     scalar_dict::Dict{Symbol, Vector{Matrix{Float64}}}
-    tensor_dict::Dict{Int, Matrix{Vector{SparseMatrixCSC{Float64, Int}}}}
+    tensor_dict::Dict{Int, Matrix{Vector{Matrix{Float64}}}}
 end
 
 struct EnlargedBlockGPU{Nc} <: EnlargedBlock{Nc}
@@ -30,7 +30,7 @@ struct EnlargedBlockGPU{Nc} <: EnlargedBlock{Nc}
     mβ_list::Vector{Int}
     mαβ::Matrix{Int}
     scalar_dict::Dict{Symbol, Vector{CuMatrix{Float64}}}
-    tensor_dict::Dict{Int, Matrix{Vector{SparseMatrixCSC{Float64, Int}}}}
+    tensor_dict::Dict{Int, Matrix{Vector{Matrix{Float64}}}} # fix later
 end
 
 """
@@ -55,7 +55,7 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
     end
 
     zy = (x -> x <= Ly ? x : 2Ly + 1 - x)(mod1(block.length + 1, 2Ly))
-    tensor_dict = Dict{Int, Matrix{Vector{SparseMatrixCSC{Float64, Int}}}}()
+    tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
     if rank == 0
         fac1 = sqrt((Nc ^ 2 - 1) / Nc)
         dp = [directproduct(βs[j], adjoint) for j in 1 : lenβ]
@@ -71,7 +71,7 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
                         end
                     end
                 end
-                sparse(rtn)
+                rtn
             end
         end
         MPI.bcast(ms, 0, comm)
@@ -89,7 +89,7 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
             if rank == 0
                 MPI.bcast(Stemp[i, j][τ1], 0, comm)
             else
-                Stemp[i, j][τ1] .= MPI.bcast(nothing, 0, comm)::SparseMatrixCSC{Float64, Int}
+                Stemp[i, j][τ1] .= MPI.bcast(nothing, 0, comm)::Matrix{Float64}
             end
         end
     end
@@ -237,15 +237,15 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
                                     end
                                 end
                             end
-                            sparse(rtn)
+                            rtn
                         end
                     end
 
-                    if engine <: GPUEngine
-                        Snew = [CUSPARSE.CuSparseMatrixCSC.(Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
-                    else
-                        Snew = Stemp
-                    end
+                    # if engine <: GPUEngine
+                    #     Snew = [CUSPARSE.CuSparseMatrixCSC.(Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
+                    # else
+                    Snew = Stemp
+                    # end
 
                     if fileio
                         if engine <: GPUEngine

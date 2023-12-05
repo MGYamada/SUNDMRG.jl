@@ -2,7 +2,6 @@ module SUNDMRG
 
 using MPI
 using LinearAlgebra
-using SparseArrays
 using SUNRepresentations
 using RationalRoots
 using WignerSymbols
