@@ -94,7 +94,11 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
         end
     end
 
-    tensor_dict[zy] = Stemp
+    if engine <: GPUEngine
+        tensor_dict[zy] = [CuArray.(Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
+    else
+        tensor_dict[zy] = Stemp
+    end
 
     if rank == 0
         y1 = (x -> x <= Ly ? x : 2Ly + 1 - x)(mod1(block.length, 2Ly))
