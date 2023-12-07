@@ -269,7 +269,7 @@ function table_9ν(Nc, widthmax, table4, table_3ν)
                                     if T[k, l]
                                         factor3 = inv(table_3ν[α2, β2, γ])
                                         A = table4[β1, α1, γ, β2, α2]
-                                        @tensor B[k2, k3, k4, k1] := factor3[k4, k6] * A[k3, k2, k6, k5] * factor2[k5, k1]
+                                        @ein B[k2, k3, k4, k1] := factor3[k4, k6] * A[k3, k2, k6, k5] * factor2[k5, k1]
                                         table4[α1, β1, γ, α2, β2] = factor1 .* B
                                     end
                                 end
