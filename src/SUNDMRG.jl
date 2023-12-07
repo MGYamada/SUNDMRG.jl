@@ -12,7 +12,7 @@ using MAGMA
 # using Threads
 using ThreadsX
 using Permutations
-using TensorOperations
+using OMEinsum
 
 export DMRGOutput, run_DMRG, make_table, make_table3nu, make_table4, HeisenbergModel, SU, SquareLattice, HoneycombLattice, CPUEngine, GPUEngine
 
