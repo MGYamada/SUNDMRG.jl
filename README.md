@@ -92,3 +92,4 @@ MIT
 
 Please inquire questions to Masahiko G. Yamada (@MGYamada).
 Some functions are written by @maartenvd.
+I would also thank Frank Pollmann and Karlo Penc for stimulating discussions.
