@@ -1,7 +1,7 @@
 name = "SUNDMRG"
 uuid = "f5f04b14-1ee9-4d01-a958-b95a245b82cc"
 authors = ["MGYamada <myspinor@gmail.com>"]
-version = "1.4.0"
+version = "1.4.1"
 
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
