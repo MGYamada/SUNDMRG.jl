@@ -80,6 +80,14 @@ signfactor = iseven(Nc) ? -1.0 : 1.0
 ```
 in `finite.jl`?
 
+## Citation
+
+If you write a paper using this code, please cite the following papers as well.
+
+`Masahiko G. Yamada, arXiv:2601.06549 (2026).`
+
+https://arxiv.org/abs/2601.06549
+
 ## License
 
 MIT
