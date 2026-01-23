@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Yamada"
+  given-names: "Masahiko G."
+title: "SUNDMRG"
+url: "https://github.com/MGYamada/SUNDMRG.jl"
+preferred-citation:
+  type: article
+  authors:
+  - family-names: "Yamada"
+    given-names: "Masahiko G."
+  doi: "10.48550/arXiv.2601.06549"
+  journal: "arXiv"
+  month: 1
+  start: 2601.06549 # First page number
+  title: "Topological Z4 spin-orbital liquid on the honeycomb lattice"
+  year: 2026
+
