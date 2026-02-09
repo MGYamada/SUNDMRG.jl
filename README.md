@@ -72,14 +72,6 @@ The value has to become zero or a negligibly small value in the last few sweeps.
 * MPS formulation
 * Supporting a spin system not with a fundamental representation per site
 
-## Open Question
-
-Why do we need
-```julia
-signfactor = iseven(Nc) ? -1.0 : 1.0
-```
-in `finite.jl`?
-
 ## Citation
 
 If you write a paper using this code, please cite the following papers as well.
