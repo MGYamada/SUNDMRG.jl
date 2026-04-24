@@ -1,8 +1,10 @@
+using SUNRepresentations: weight
+
 @testset "Pure SU helper functions" begin
     irr0 = SUNDMRG.irrep(3, 0)
     irr1 = SUNDMRG.irrep(3, 1)
-    @test irr0 == [1, 1, 1]
-    @test irr1 == [2, 1, 1]
+    @test irr0 == [0, 0, 0]
+    @test irr1 == [1, 0, 0]
 
     λ = SUNDMRG.irreplist(2, 3)
     @test first(weight.(λ)) == (0, 0)

@@ -1,6 +1,5 @@
 using Test
 using SUNDMRG
-using SUNRepresentations
 
 @testset "SUNDMRG CPU-only pure tests" begin
     include("test_init.jl")

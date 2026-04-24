@@ -28,7 +28,7 @@ function make_table4(Nc, widthmax)
         if iseven(Nc) && isodd(h)
             continue
         end
-        γ = SUNIrrep(ntuple(i -> 0 + (i <= h), Val(Nc)))
+        γ = SUNIrrep{Nc}(ntuple(i -> 0 + (i <= h), Val(Nc)))
         OM = OM_matrix(λ, γ)
         for (i, α1) in Iterators.filter(x -> any(OM[x[1], :] .> 0), enumerate(λ))
             α2dict = directproduct(α1, adjoint)

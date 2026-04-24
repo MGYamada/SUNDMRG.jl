@@ -60,7 +60,7 @@ function make_table3nu(Nc, widthmax)
         if iseven(Nc) && isodd(h)
             continue
         end
-        γ = SUNIrrep(ntuple(i -> 0 + (i <= h), Val(Nc)))
+        γ = SUNIrrep{Nc}(ntuple(i -> 0 + (i <= h), Val(Nc)))
         for (i, α1) in enumerate(λ), (j, β1) in enumerate(λ)
             OM = outer_multiplicity(α1, β1, γ)
             if OM > 0
