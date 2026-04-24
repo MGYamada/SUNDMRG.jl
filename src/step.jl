@@ -104,10 +104,10 @@ newblock, newtensor_dict, newblock_enl, trerr, energy, Ψ0, trmat, ee, es, Sj = 
 a single step for DMRG
 """
 function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_dict, env_tensor_dict, sys_enl::EnlargedBlock{Nc}, env_enl::EnlargedBlock{Nc}, Ly, m, α, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, ::Val{env_calc}; Ψ0_guess = nothing, ES_max = -Inf, correlation = :none, margin = 0, lattice = :square, Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0), alg = :slow, noisy = true) where {Nc, env_calc}
-    sys_αs = MPI.bcast(sys_enl.α_list, 0, comm)::Vector{SUNIrrep{Nc}}
-    env_αs = MPI.bcast(env_enl.α_list, 0, comm)::Vector{SUNIrrep{Nc}}
-    sys_βs = MPI.bcast(sys_enl.β_list, 0, comm)::Vector{SUNIrrep{Nc}}
-    env_βs = MPI.bcast(env_enl.β_list, 0, comm)::Vector{SUNIrrep{Nc}}
+    sys_αs = MPI.bcast(sys_enl.α_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
+    env_αs = MPI.bcast(env_enl.α_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
+    sys_βs = MPI.bcast(sys_enl.β_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
+    env_βs = MPI.bcast(env_enl.β_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
     sys_ms = MPI.bcast(sys_enl.mβ_list, 0, comm)::Vector{Int}
     env_ms = MPI.bcast(env_enl.mβ_list, 0, comm)::Vector{Int}
     sys_mαβ = MPI.bcast(sys_enl.mαβ, 0, comm)::Matrix{Int}
@@ -708,7 +708,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
         if rank == 0
             push!(newblock, Block(block_enl.length, block_enl.bonds, block_enl.β_list, block_enl.mβ_list, msnew, Dict{Symbol, Vector{Matrix{Float64}}}(:H => Hnew)))
         else
-            push!(newblock, Block(block_enl.length, Tuple{Int, Int}[], SUNIrrep{Nc}[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}()))
+            push!(newblock, Block(block_enl.length, Tuple{Int, Int}[], typeof(trivialirrep(Val(Nc)))[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}()))
         end
 
         push!(newtensor_dict, tensor_dict)

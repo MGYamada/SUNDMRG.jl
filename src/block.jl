@@ -1,7 +1,7 @@
 struct Block{Nc}
     length::Int
     bonds::Vector{Tuple{Int, Int}}
-    β_list::Vector{SUNIrrep{Nc}}
+    β_list::Vector{<:SUNIrrep{Nc}}
     mβ_list_old::Vector{Int}
     mβ_list::Vector{Int}
     scalar_dict::Dict{Symbol, Vector{Matrix{Float64}}}
@@ -12,9 +12,9 @@ abstract type EnlargedBlock{Nc} end
 struct EnlargedBlockCPU{Nc} <: EnlargedBlock{Nc}
     length::Int
     bonds::Vector{Tuple{Int, Int}}
-    α_list::Vector{SUNIrrep{Nc}}
+    α_list::Vector{<:SUNIrrep{Nc}}
     mα_list::Vector{Int}
-    β_list::Vector{SUNIrrep{Nc}}
+    β_list::Vector{<:SUNIrrep{Nc}}
     mβ_list::Vector{Int}
     mαβ::Matrix{Int}
     scalar_dict::Dict{Symbol, Vector{Matrix{Float64}}}
@@ -24,9 +24,9 @@ end
 struct EnlargedBlockGPU{Nc} <: EnlargedBlock{Nc}
     length::Int
     bonds::Vector{Tuple{Int, Int}}
-    α_list::Vector{SUNIrrep{Nc}}
+    α_list::Vector{<:SUNIrrep{Nc}}
     mα_list::Vector{Int}
-    β_list::Vector{SUNIrrep{Nc}}
+    β_list::Vector{<:SUNIrrep{Nc}}
     mβ_list::Vector{Int}
     mαβ::Matrix{Int}
     scalar_dict::Dict{Symbol, Vector{CuMatrix{Float64}}}
@@ -173,9 +173,9 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
         end
     else
         if engine <: GPUEngine
-            block_enl = EnlargedBlockGPU{Nc}(block.length + 1, Tuple{Int, Int}[], SUNIrrep{Nc}[], Int[], SUNIrrep{Nc}[], Int[], zeros(Int, 0, 0), Dict{Symbol, Vector{CuMatrix{Float64}}}(:H => Hnew), tensor_dict)
+            block_enl = EnlargedBlockGPU{Nc}(block.length + 1, Tuple{Int, Int}[], typeof(trivialirrep(Val(Nc)))[], Int[], typeof(trivialirrep(Val(Nc)))[], Int[], zeros(Int, 0, 0), Dict{Symbol, Vector{CuMatrix{Float64}}}(:H => Hnew), tensor_dict)
         else
-            block_enl = EnlargedBlockCPU{Nc}(block.length + 1, Tuple{Int, Int}[], SUNIrrep{Nc}[], Int[], SUNIrrep{Nc}[], Int[], zeros(Int, 0, 0), Dict{Symbol, Vector{Matrix{Float64}}}(:H => Hnew), tensor_dict)
+            block_enl = EnlargedBlockCPU{Nc}(block.length + 1, Tuple{Int, Int}[], typeof(trivialirrep(Val(Nc)))[], Int[], typeof(trivialirrep(Val(Nc)))[], Int[], zeros(Int, 0, 0), Dict{Symbol, Vector{Matrix{Float64}}}(:H => Hnew), tensor_dict)
         end
     end
 
