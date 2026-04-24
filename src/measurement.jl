@@ -126,7 +126,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     end
                 end
 
-                sisj = MPI.Reduce(dot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
+                sisj = MPI.Reduce(mydot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
 
                 if rank == 0
                     SiSj[bond] = sisj
@@ -228,7 +228,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     end
                 end
 
-                sisj = MPI.Reduce(dot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
+                sisj = MPI.Reduce(mydot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
 
                 if rank == 0
                     SiSj[bond] = sisj
@@ -329,7 +329,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                         end
                     end
 
-                    sisj = MPI.Reduce(dot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
+                    sisj = MPI.Reduce(mydot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
 
                     if rank == 0
                         SiSj[bond] = sisj
@@ -482,7 +482,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     end
                 end
 
-                sisj = MPI.Reduce(dot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
+                sisj = MPI.Reduce(mydot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
 
                 if rank == 0
                     SiSj[bond] = sisj

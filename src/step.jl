@@ -726,9 +726,9 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
     end
 
     if !isnothing(Ψ0_guess)
-        nume = MPI.Reduce(dot(Ψ0_guess, Ψ0), MPI.SUM, 0, comm)
-        den1 = MPI.Reduce(dot(Ψ0_guess, Ψ0_guess), MPI.SUM, 0, comm)
-        den2 = MPI.Reduce(dot(Ψ0, Ψ0), MPI.SUM, 0, comm)
+        nume = MPI.Reduce(mydot(Ψ0_guess, Ψ0), MPI.SUM, 0, comm)
+        den1 = MPI.Reduce(mydot(Ψ0_guess, Ψ0_guess), MPI.SUM, 0, comm)
+        den2 = MPI.Reduce(mydot(Ψ0, Ψ0), MPI.SUM, 0, comm)
         if noisy && rank == 0
             println("overlap |<ψ_guess|ψ>| = ", abs(nume) / sqrt(den1 * den2))
         end
