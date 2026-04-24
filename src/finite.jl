@@ -107,7 +107,8 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
         end
     end
 
-    γ_list = SUNIrrep{Nc}[]
+    γ_type = typeof(trivialirrep(Val(Nc)))
+    γ_list = γ_type[]
     for h in ((1 : Nc) .% Nc)
         push!(γ_list, SUNIrrep{Nc}(ntuple(i -> 0 + (i <= h), Val(Nc))))
     end
@@ -207,11 +208,11 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
         println("#")
     else
         dirid = 0
-        blockL = Block(0, Tuple{Int, Int}[], SUNIrrep{Nc}[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
+        blockL = Block(0, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
         blockL_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
 
         if !mirror
-            blockR = Block(0, Tuple{Int, Int}[], SUNIrrep{Nc}[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
+            blockR = Block(0, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
             blockR_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
         end
     end
@@ -359,7 +360,7 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
 
                         env_tensor_dict = spin_operators!(tensor_table, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = lattice)
                     else
-                        env_block = Block(L - sys_blocks[i].length - 1, Tuple{Int, Int}[], SUNIrrep{Nc}[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
+                        env_block = Block(L - sys_blocks[i].length - 1, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
                         env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
                         env_trmats[i] = Matrix{Float64}[]
                     end
@@ -388,7 +389,7 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
 
                     env_tensor_dict = spin_operators!(tensor_table, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = lattice)
                 else
-                    env_block = Block(L - sys_blocks[i].length - 2, Tuple{Int, Int}[], SUNIrrep{Nc}[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
+                    env_block = Block(L - sys_blocks[i].length - 2, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
                     env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
                     env_trmats[i] = Matrix{Float64}[]
                 end
@@ -473,7 +474,7 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
 
         env_tensor_dict = spin_operators!(tensor_table, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = lattice)
     else
-        env_block = Block(L - sys_block.length - 1, Tuple{Int, Int}[], SUNIrrep{Nc}[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
+        env_block = Block(L - sys_block.length - 1, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
         env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
         env_trmat = Matrix{Float64}[]
     end
@@ -515,7 +516,7 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
 
                 env_tensor_dict = spin_operators!(tensor_table, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = lattice)
             else
-                env_block = Block(L - sys_block.length - 2, Tuple{Int, Int}[], SUNIrrep{Nc}[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
+                env_block = Block(L - sys_block.length - 2, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
                 env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
                 env_trmat = Matrix{Float64}[]
             end
