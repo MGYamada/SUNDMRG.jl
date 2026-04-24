@@ -233,7 +233,7 @@ function table_9ν(Nc, widthmax, table4, table_3ν)
         if iseven(Nc) && isodd(h)
             continue
         end
-        γ = SUNIrrep(ntuple(i -> 0 + (i <= h), Val(Nc)))
+        γ = SUNIrrep{Nc}(ntuple(i -> 0 + (i <= h), Val(Nc)))
         T = OM_matrix(λ, γ) .> 0
         for (i, α1) in Iterators.filter(x -> any(T[x[1], :]), enumerate(λ))
             for (j, β1) in Iterators.filter(x -> T[i, x[1]], enumerate(λ))
@@ -250,7 +250,7 @@ function table_9ν(Nc, widthmax, table4, table_3ν)
         if iseven(Nc) && isodd(h)
             continue
         end
-        γ = SUNIrrep(ntuple(i -> 0 + (i <= h), Val(Nc)))
+        γ = SUNIrrep{Nc}(ntuple(i -> 0 + (i <= h), Val(Nc)))
         T = OM_matrix(λ, γ) .> 0
         for (i, α1) in Iterators.filter(x -> any(T[x[1], :]), enumerate(λ))
             α2dict = directproduct(α1, adjoint)
