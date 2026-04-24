@@ -59,9 +59,19 @@ The value has to become zero or a negligibly small value in the last few sweeps.
 * SUNRepresentations.jl 0.1.2-
 * MPI.jl: We strongly recommend to use Open MPI.
 
+## Testing
+
+A lightweight CPU-only unit test suite is available for pure/helper functionality
+(e.g., initialization helpers, SU helper routines, sparse vector operations, and
+small table helper checks).
+
+Run:
+```julia
+julia --project -e 'using Pkg; Pkg.test()'
+```
+
 ## TODO
 
-* Type piracy in lanczos.jl
 * Hybrid parallelization
 * Supporting the triangular lattice
 * Thick-restart Lanczos

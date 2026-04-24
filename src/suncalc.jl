@@ -34,7 +34,7 @@ function irreplist(Nc, widthmax)
     rtn = SUNIrrep{Nc}[]
     elem = irrep(Nc, index)
     while elem[1] <= widthmax
-        push!(rtn, SUNIrrep(Tuple(elem)))
+        push!(rtn, SUNIrrep{Nc}(Tuple(elem)))
         index += 1
         elem .= irrep(Nc, index)
     end
@@ -69,8 +69,8 @@ end
 trivialirrep(Val(Nc))
 returns the trivial irrep
 """
-function trivialirrep(val)
-    SUNIrrep(ntuple(i -> 0, val))
+function trivialirrep(::Val{Nc}) where Nc
+    SUNIrrep{Nc}(ntuple(i -> 0, Val(Nc)))
 end
 
 """
@@ -78,15 +78,15 @@ adjointirrep(Val(Nc))
 returns the adjoint irrep
 """
 function adjointirrep(::Val{Nc}) where Nc
-    SUNIrrep(ntuple(i -> 1 + (i == 1) - (i == Nc), Val(Nc)))
+    SUNIrrep{Nc}(ntuple(i -> 1 + (i == 1) - (i == Nc), Val(Nc)))
 end
 
 """
 fundamentalirrep(Val(Nc))
 returns the fundamental irrep
 """
-function fundamentalirrep(val)
-    SUNIrrep(ntuple(i -> 0 + (i == 1), val))
+function fundamentalirrep(::Val{Nc}) where Nc
+    SUNIrrep{Nc}(ntuple(i -> 0 + (i == 1), Val(Nc)))
 end
 
 """

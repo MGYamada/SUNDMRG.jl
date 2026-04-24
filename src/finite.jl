@@ -109,7 +109,7 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
 
     γ_list = SUNIrrep{Nc}[]
     for h in ((1 : Nc) .% Nc)
-        push!(γ_list, SUNIrrep(ntuple(i -> 0 + (i <= h), Val(Nc))))
+        push!(γ_list, SUNIrrep{Nc}(ntuple(i -> 0 + (i <= h), Val(Nc))))
     end
 
     MPI.Init_thread(MPI.THREAD_FUNNELED)
