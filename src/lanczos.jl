@@ -3,17 +3,17 @@ const tol_Lanczos = 1e-13
 
 MyMatrix = Matrix{<:Vector{<:AbstractMatrix{Float64}}}
 
-function LinearAlgebra.dot(x::MyMatrix, y::MyMatrix)
+function mydot(x::MyMatrix, y::MyMatrix)
     s = 0.0
     for (IX, IY) in zip(eachindex(x), eachindex(y))
         for (JX, JY) in zip(eachindex(x[IX]), eachindex(y[IY]))
-            s += dot(x[IX][JX], y[IY][JY])
+            s += LinearAlgebra.dot(x[IX][JX], y[IY][JY])
         end
     end
     s
 end
 
-function LinearAlgebra.axpy!(α, x::MyMatrix, y::MyMatrix)
+function myaxpy!(α, x::MyMatrix, y::MyMatrix)
     for (IY, IX) in zip(eachindex(y), eachindex(x))
         for (JY, JX) in zip(eachindex(y[IY]), eachindex(x[IX]))
             @. y[IY][JY] += α * x[IX][JX]
@@ -22,7 +22,7 @@ function LinearAlgebra.axpy!(α, x::MyMatrix, y::MyMatrix)
     y
 end
 
-function LinearAlgebra.axpby!(α, x::MyMatrix, β, y::MyMatrix)
+function myaxpby!(α, x::MyMatrix, β, y::MyMatrix)
     for (IX, IY) in zip(eachindex(x), eachindex(y))
         for (JX, JY) in zip(eachindex(x[IX]), eachindex(y[IY]))
             @. y[IY][JY] = α * x[IX][JX] + β * y[IY][JY]
@@ -31,7 +31,7 @@ function LinearAlgebra.axpby!(α, x::MyMatrix, β, y::MyMatrix)
     y
 end
 
-function LinearAlgebra.rmul!(A::MyMatrix, b::Number)
+function myrmul!(A::MyMatrix, b::Number)
     for I in eachindex(A)
         for J in eachindex(A[I])
             A[I][J] .*= b
@@ -40,7 +40,7 @@ function LinearAlgebra.rmul!(A::MyMatrix, b::Number)
     A
 end
 
-function LinearAlgebra.rdiv!(A::MyMatrix, b::Number)
+function myrdiv!(A::MyMatrix, b::Number)
     for I in eachindex(A)
         for J in eachindex(A[I])
             A[I][J] ./= b
@@ -49,7 +49,7 @@ function LinearAlgebra.rdiv!(A::MyMatrix, b::Number)
     A
 end
 
-function Base.copyto!(dest::MyMatrix, src::MyMatrix)
+function mycopyto!(dest::MyMatrix, src::MyMatrix)
     for (IX, IY) in zip(eachindex(dest), eachindex(src))
         for (JX, JY) in zip(eachindex(dest[IX]), eachindex(src[IY]))
             dest[IX][JX] .= src[IY][JY]
@@ -69,28 +69,28 @@ function CG!(A!::Function, val, x, Ax, buffer1, buffer2, comm, rank)
     Ap = buffer2
     for i in 1 : 100
         valshift = val - 1e-8
-        axpby!(1.0 + valshift, x, -1.0, r)
-        copyto!(p, r)
-        normold = MPI.Allreduce(dot(r, r), MPI.SUM, comm)
+        myaxpby!(1.0 + valshift, x, -1.0, r)
+        mycopyto!(p, r)
+        normold = MPI.Allreduce(mydot(r, r), MPI.SUM, comm)
         j = 1
         while true
             A!(Ap, p)
-            axpy!(-valshift, p, Ap)
-            α = normold / MPI.Allreduce(dot(p, Ap), MPI.SUM, comm)
-            axpy!(α, p, x)
-            axpy!(-α, Ap, r)
-            normnew = MPI.Allreduce(dot(r, r), MPI.SUM, comm)
+            myaxpy!(-valshift, p, Ap)
+            α = normold / MPI.Allreduce(mydot(p, Ap), MPI.SUM, comm)
+            myaxpy!(α, p, x)
+            myaxpy!(-α, Ap, r)
+            normnew = MPI.Allreduce(mydot(r, r), MPI.SUM, comm)
             if j == 10 || normnew < 1e-8
                 break
             end
             β = normnew / normold
-            axpby!(1.0, r, β, p)
+            myaxpby!(1.0, r, β, p)
             normold = normnew
             j += 1
         end
-        rdiv!(x, sqrt(MPI.Allreduce(dot(x, x), MPI.SUM, comm)))
+        myrdiv!(x, sqrt(MPI.Allreduce(mydot(x, x), MPI.SUM, comm)))
         A!(r, x)
-        valnew = MPI.Allreduce(dot(x, r), MPI.SUM, comm)
+        valnew = MPI.Allreduce(mydot(x, r), MPI.SUM, comm)
         if abs((valnew - val) / valnew) < tol_wavefunction
             break
         end
@@ -110,7 +110,7 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine; maxiter =
             ketkm1[I][J] .= 0.0
         end
     end
-    rdiv!(initial, sqrt(MPI.Allreduce(dot(initial, initial), MPI.SUM, comm)))
+    myrdiv!(initial, sqrt(MPI.Allreduce(mydot(initial, initial), MPI.SUM, comm)))
     ketk = deepcopy(initial)
     ketk1 = deepcopy(ketk)
     β = 0.0
@@ -126,7 +126,7 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine; maxiter =
     k = 1
     while true
         A!(ketk1, ketk)
-        α = MPI.Allreduce(dot(ketk, ketk1), MPI.SUM, comm)
+        α = MPI.Allreduce(mydot(ketk, ketk1), MPI.SUM, comm)
         push!(αlist, α)
         if k >= position
             if rank == 0
@@ -138,9 +138,9 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine; maxiter =
             end
             vold = vals[position]
         end
-        axpy!(-β, ketkm1, ketk1)
-        axpy!(-α, ketk, ketk1)
-        β = sqrt(MPI.Allreduce(dot(ketk1, ketk1), MPI.SUM, comm))
+        myaxpy!(-β, ketkm1, ketk1)
+        myaxpy!(-α, ketk, ketk1)
+        β = sqrt(MPI.Allreduce(mydot(ketk1, ketk1), MPI.SUM, comm))
         if β == 0.0
             if rank == 0
                 vals, vecs = LAPACK.stev!('V', copy(αlist), copy(βlist))
@@ -148,9 +148,9 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine; maxiter =
             vals = MPI.bcast(vals, 0, comm)::Vector{Float64}
             break
         end
-        rdiv!(ketk1, β)
-        copyto!(ketkm1, ketk)
-        copyto!(ketk, ketk1)
+        myrdiv!(ketk1, β)
+        mycopyto!(ketkm1, ketk)
+        mycopyto!(ketk, ketk1)
         push!(βlist, β)
         if alg == :fast
             push!(ketk_list, map(x -> Array.(x), ketk))
@@ -164,34 +164,34 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine; maxiter =
             ketkm1[I][J] .= 0.0
         end
     end
-    copyto!(ketk, initial)
+    mycopyto!(ketk, initial)
     β = 0.0
     position = min(position, size(vecs, 2))
-    rmul!(initial, vecs[1, position])
+    myrmul!(initial, vecs[1, position])
     for k in 1 : size(vecs, 1) - 1
         if alg == :slow
             A!(ketk1, ketk)
             α = αlist[k]
-            axpy!(-β, ketkm1, ketk1)
-            axpy!(-α, ketk, ketk1)
+            myaxpy!(-β, ketkm1, ketk1)
+            myaxpy!(-α, ketk, ketk1)
             β = βlist[k]
-            rdiv!(ketk1, β)
-            copyto!(ketkm1, ketk)
-            copyto!(ketk, ketk1)
-            axpy!(vecs[k + 1, position], ketk, initial)
+            myrdiv!(ketk1, β)
+            mycopyto!(ketkm1, ketk)
+            mycopyto!(ketk, ketk1)
+            myaxpy!(vecs[k + 1, position], ketk, initial)
         else
             if engine <: GPUEngine
-                axpy!(vecs[k + 1, position], [CuArray.(ketk_list[k][i, j]) for i in 1 : m, j in 1 : n], initial)
+                myaxpy!(vecs[k + 1, position], [CuArray.(ketk_list[k][i, j]) for i in 1 : m, j in 1 : n], initial)
             else
-                axpy!(vecs[k + 1, position], ketk_list[k], initial)
+                myaxpy!(vecs[k + 1, position], ketk_list[k], initial)
             end
         end
     end
-    rdiv!(initial, sqrt(MPI.Allreduce(dot(initial, initial), MPI.SUM, comm)))
+    myrdiv!(initial, sqrt(MPI.Allreduce(mydot(initial, initial), MPI.SUM, comm)))
     A!(ketk, initial)
-    val = MPI.Allreduce(dot(initial, ketk), MPI.SUM, comm)
+    val = MPI.Allreduce(mydot(initial, ketk), MPI.SUM, comm)
     val2 = val ^ 2
-    var = MPI.Allreduce(dot(ketk, ketk), MPI.SUM, comm)
+    var = MPI.Allreduce(mydot(ketk, ketk), MPI.SUM, comm)
     if abs((val - vals[position]) / val) < tol_wavefunction && abs((var - val2) / val2) < tol_wavefunction
         rtnval = val
     else
