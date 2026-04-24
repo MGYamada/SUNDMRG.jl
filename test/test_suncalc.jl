@@ -31,3 +31,16 @@ using SUNRepresentations: weight
     w6r = SUNDMRG.wigner6νrev(funda, funda, adj, funda, funda, adj)
     @test size(w6) == reverse(size(w6r))
 end
+
+
+@testset "Additional irrep/OM consistency" begin
+    λ0 = SUNDMRG.irreplist(3, 0)
+    @test length(λ0) == 1
+    @test weight(only(λ0)) == (0, 0, 0)
+
+    trivial3 = SUNDMRG.trivialirrep(Val(3))
+    funda3 = SUNDMRG.fundamentalirrep(Val(3))
+    OMself = SUNDMRG.OM_matrix([trivial3, funda3], trivial3)
+    @test size(OMself) == (2, 2)
+    @test OMself[1, 1] == 1
+end
