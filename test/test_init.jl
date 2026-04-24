@@ -14,8 +14,8 @@
     @test_throws AssertionError SUNDMRG.HoneycombLattice(4, 3, :ZC)
     @test_throws AssertionError SUNDMRG.HoneycombLattice(4, 2, :PBC)
 
-    left = SUNDMRG.Block(2, Tuple{Int, Int}[], [SUNDMRG.trivialirrep(Val(2))], [1], [1], Dict(:H => [zeros(1, 1)]))
-    right = SUNDMRG.Block(3, Tuple{Int, Int}[], [SUNDMRG.trivialirrep(Val(2))], [1], [1], Dict(:H => [zeros(1, 1)]))
+    left = (length = 2,)
+    right = (length = 3,)
 
     @test SUNDMRG.graphic(left, right) == "==**---"
     @test SUNDMRG.graphic(left, right; sys_label = :r) == "---**=="
