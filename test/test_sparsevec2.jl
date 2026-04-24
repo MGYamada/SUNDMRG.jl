@@ -17,3 +17,18 @@
     @test a[1] == 2.5
     @test a[3] == 5.0
 end
+
+
+@testset "SparseVector2 constructors/utilities" begin
+    z = SUNDMRG.spzeros2(Float64, Int, 7)
+    @test z.n == 7
+    @test isempty(z.nzind)
+    @test isempty(z.nzval)
+
+    unsorted = SUNDMRG.sparsevec2(Int[5, 2, 4], [50.0, 20.0, 40.0], 6)
+    @test unsorted.nzind == [2, 4, 5]
+    @test unsorted.nzval == [20.0, 40.0, 50.0]
+
+    SUNDMRG.lmul!(0.5, unsorted)
+    @test unsorted.nzval == [10.0, 20.0, 25.0]
+end
