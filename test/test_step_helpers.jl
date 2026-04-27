@@ -18,7 +18,7 @@
         @test first(dc) == 0
         @test last(dc) == N
         @test issorted(dc)
-        @test all(x -> x in (0, 1, cld(N, Ncpu)), diff(dc))
+        @test all(x -> x in (fld(N, Ncpu), cld(N, Ncpu)), diff(dc))
         @test maximum(diff(dc)) - minimum(diff(dc)) <= 1
     end
 end
