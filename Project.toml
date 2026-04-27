@@ -1,7 +1,7 @@
 name = "SUNDMRG"
 uuid = "f5f04b14-1ee9-4d01-a958-b95a245b82cc"
-authors = ["MGYamada <myspinor@gmail.com>"]
 version = "1.4.2"
+authors = ["MGYamada <myspinor@gmail.com>"]
 
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
@@ -19,7 +19,7 @@ WignerSymbols = "9f57e263-0b3d-5e2e-b1be-24f2bb48858b"
 [compat]
 CUDA = ">= 5.0"
 MAGMA = ">= 0.1.2"
-SUNRepresentations = ">= 0.1.2"
+SUNRepresentations = "0.3"
 julia = ">= 1.6"
 
 [extras]
