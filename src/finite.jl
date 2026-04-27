@@ -176,6 +176,10 @@ function _init_state(engine, lattice, Lx, Ly, Nc, target, m_warmup, widthmax, ta
             else
                 trmatR = [diagm([1.0])]
             end
+        else
+            blockR = blockL
+            blockR_tensor_dict = blockL_tensor_dict
+            trmatR = trmatL
         end
 
         if mirror
@@ -215,12 +219,19 @@ function _init_state(engine, lattice, Lx, Ly, Nc, target, m_warmup, widthmax, ta
         if !mirror
             blockR = Block(0, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
             blockR_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
+            trmatR = Matrix{Float64}[]
+        else
+            blockR = blockL
+            blockR_tensor_dict = blockL_tensor_dict
+            trmatR = Matrix{Float64}[]
         end
     end
 
     blockL_enl = enlarge_block(blockL, blockL_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
     if !mirror
         blockR_enl = enlarge_block(blockR, blockR_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
+    else
+        blockR_enl = blockL_enl
     end
 
     if engine <: GPUEngine
