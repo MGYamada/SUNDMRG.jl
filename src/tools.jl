@@ -19,11 +19,7 @@ function eig_prediction(Ψ0, sys_label, sys_enl::EnlargedBlock{Nc}, env_enl::Enl
     env_mα = MPI.bcast(env_enl.mα_list, 0, comm)::Vector{Int}
     env_mβ = MPI.bcast(env_enl.mβ_list, 0, comm)::Vector{Int}
 
-    if engine <: GPUEngine
-        Ψ0_guess = [[CUDA.zeros(Float64, mi, mj) for J in 1 : ((j + i - 2) % Ncpu == rank ? OM[j, i] : 0)] for (i, mi) in enumerate(env_mα), (j, mj) in enumerate(sys_mβ)]
-    else
-        Ψ0_guess = [[zeros(mi, mj) for J in 1 : ((j + i - 2) % Ncpu == rank ? OM[j, i] : 0)] for (i, mi) in enumerate(env_mα), (j, mj) in enumerate(sys_mβ)]
-    end
+    Ψ0_guess = [[zeros_like_engine(engine, Float64, mi, mj) for J in 1 : ((j + i - 2) % Ncpu == rank ? OM[j, i] : 0)] for (i, mi) in enumerate(env_mα), (j, mj) in enumerate(sys_mβ)]
     if rank == 0
         for j in 1 : length(sys_αs)
             MPI.bcast(size(sys_trmat[j]), 0, comm)::Tuple{Int, Int}
@@ -34,32 +30,16 @@ function eig_prediction(Ψ0, sys_label, sys_enl::EnlargedBlock{Nc}, env_enl::Enl
             MPI.Bcast!(env_trmat[i], 0, comm)
         end
     else
-        if engine <: GPUEngine
-            sys_trmat = CuMatrix{Float64}[]
-        else
-            sys_trmat = Matrix{Float64}[]
-        end
+        sys_trmat = engine_matrix_type(engine)[]
         for j in 1 : length(sys_αs)
             x, y = MPI.bcast(nothing, 0, comm)::Tuple{Int, Int}
-            if engine <: GPUEngine
-                push!(sys_trmat, CuMatrix{Float64}(undef, x, y))
-            else
-                push!(sys_trmat, Matrix{Float64}(undef, x, y))
-            end
+            push!(sys_trmat, engine_matrix_type(engine)(undef, x, y))
             MPI.Bcast!(sys_trmat[j], 0, comm)
         end
-        if engine <: GPUEngine
-            env_trmat = CuMatrix{Float64}[]
-        else
-            env_trmat = Matrix{Float64}[]
-        end
+        env_trmat = engine_matrix_type(engine)[]
         for i in 1 : length(env_αs)
             x, y = MPI.bcast(nothing, 0, comm)::Tuple{Int, Int}
-            if engine <: GPUEngine
-                push!(env_trmat, CuMatrix{Float64}(undef, x, y))
-            else
-                push!(env_trmat, Matrix{Float64}(undef, x, y))
-            end
+            push!(env_trmat, engine_matrix_type(engine)(undef, x, y))
             MPI.Bcast!(env_trmat[i], 0, comm)
         end
     end
@@ -73,11 +53,7 @@ function eig_prediction(Ψ0, sys_label, sys_enl::EnlargedBlock{Nc}, env_enl::Enl
             if rank == root
                 temp1 = Ψ0[k, j][om2]
             else
-                if engine <: GPUEngine
-                    temp1 = CuMatrix{Float64}(undef, env_mβ[k], sys_mα[j])
-                else
-                    temp1 = Matrix{Float64}(undef, env_mβ[k], sys_mα[j])
-                end
+                temp1 = engine_matrix_type(engine)(undef, env_mβ[k], sys_mα[j])
             end
             MPI.Bcast!(temp1, root, comm)
             temp2 = temp1 * sys_trmat[j]
@@ -122,11 +98,7 @@ function _wavefunction_reverse(Ψ0, sys_label, sys, env, widthmax, comm, rank, N
     sys_βs = MPI.bcast(sys.β_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
     env_βs = MPI.bcast(env.β_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
 
-    if engine <: GPUEngine
-        Ψ0_new = [[CUDA.zeros(Float64, size(Ψ0[i, j][J], 2), size(Ψ0[i, j][J], 1)) for J in 1 : length(Ψ0[i, j])] for j in 1 : size(Ψ0, 2), i in 1 : size(Ψ0, 1)]
-    else
-        Ψ0_new = [[zeros(size(Ψ0[i, j][J], 2), size(Ψ0[i, j][J], 1)) for J in 1 : length(Ψ0[i, j])] for j in 1 : size(Ψ0, 2), i in 1 : size(Ψ0, 1)]
-    end
+    Ψ0_new = [[zeros_like_engine(engine, Float64, size(Ψ0[i, j][J], 2), size(Ψ0[i, j][J], 1)) for J in 1 : length(Ψ0[i, j])] for j in 1 : size(Ψ0, 2), i in 1 : size(Ψ0, 1)]
 
     for j in 1 : size(Ψ0, 2), i in 1 : size(Ψ0, 1)
         OM = length(Ψ0[i, j])

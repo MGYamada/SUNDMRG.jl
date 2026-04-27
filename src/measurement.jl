@@ -28,11 +28,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     Sx = sys_tensor_dict[x]
                     # end
                 end
-                if engine <: GPUEngine
-                    Stemp = [[CUDA.zeros(Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
-                else
-                    Stemp = [[zeros(sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
-                end
+                Stemp = [[zeros_like_engine(engine, Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
                 for e in sys_enlarge
                     @. Stemp[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * Sx[e.ki, e.kj][e.τ2]
                 end
@@ -67,11 +63,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                 SiSjΨ0 = deepcopy(Ψ0)
 
                 if rank == 0
-                    if engine <: GPUEngine
-                        Ψtemp = [[CUDA.zeros(Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                    else
-                        Ψtemp = [[zeros(env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                    end
+                    Ψtemp = [[zeros_like_engine(engine, Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
                 end
 
                 for s in superblock_H2
@@ -80,11 +72,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     if rank == root1
                         temp3 = Ψ0[s.env_in, s.sys_in][s.om1]
                     else
-                        if engine <: GPUEngine
-                            temp3 = CuMatrix{Float64}(undef, s.env_in_size, s.sys_in_size)
-                        else
-                            temp3 = Matrix{Float64}(undef, s.env_in_size, s.sys_in_size)
-                        end
+                        temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
                     end
 
                     if engine <: GPUEngine
@@ -156,11 +144,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                         Sx2 = env_tensor_dict[x]
                         # end
                     end
-                    if engine <: GPUEngine
-                        env_S = [[CUDA.zeros(Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
-                    else
-                        env_S = [[zeros(env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
-                    end
+                    env_S = [[zeros_like_engine(engine, Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
                     for e in env_enlarge
                         @. env_S[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * Sx2[e.ki, e.kj][e.τ2]
                     end
@@ -169,11 +153,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                 SiSjΨ0 = deepcopy(Ψ0)
 
                 if rank == 0
-                    if engine <: GPUEngine
-                        Ψtemp = [[CUDA.zeros(Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                    else
-                        Ψtemp = [[zeros(env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                    end
+                    Ψtemp = [[zeros_like_engine(engine, Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
                 end
 
                 for s in superblock_H2
@@ -182,11 +162,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     if rank == root1
                         temp3 = Ψ0[s.env_in, s.sys_in][s.om1]
                     else
-                        if engine <: GPUEngine
-                            temp3 = CuMatrix{Float64}(undef, s.env_in_size, s.sys_in_size)
-                        else
-                            temp3 = Matrix{Float64}(undef, s.env_in_size, s.sys_in_size)
-                        end
+                        temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
                     end
 
                     if engine <: GPUEngine
@@ -257,11 +233,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                             Sy = env_tensor_dict[y]
                             # end
                         end
-                        if engine <: GPUEngine
-                            env_S = [[CUDA.zeros(Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
-                        else
-                            env_S = [[zeros(env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
-                        end
+                        env_S = [[zeros_like_engine(engine, Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
                         for e in env_enlarge
                             @. env_S[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * Sy[e.ki, e.kj][e.τ2]
                         end
@@ -270,11 +242,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     SiSjΨ0 = deepcopy(Ψ0)
 
                     if rank == 0
-                        if engine <: GPUEngine
-                            Ψtemp = [[CUDA.zeros(Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                        else
-                            Ψtemp = [[zeros(env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                        end
+                        Ψtemp = [[zeros_like_engine(engine, Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
                     end
 
                     for s in superblock_H2
@@ -283,11 +251,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                         if rank == root1
                             temp3 = Ψ0[s.env_in, s.sys_in][s.om1]
                         else
-                            if engine <: GPUEngine
-                                temp3 = CuMatrix{Float64}(undef, s.env_in_size, s.sys_in_size)
-                            else
-                                temp3 = Matrix{Float64}(undef, s.env_in_size, s.sys_in_size)
-                            end
+                            temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
                         end
 
                         if engine <: GPUEngine
@@ -346,30 +310,22 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
             if !isempty(Sj) && (sys_label == :l && sys.length == 0)
                 len = length(env_αs)
                 if engine <: GPUEngine
-                    Sj2 = [CuArray.(Sj[i, j]) for i in 1 : len, j in 1 : len]
+                    Sj2 = [to_engine_array.(Ref(engine), Sj[i, j]) for i in 1 : len, j in 1 : len]
                 else
                     Sj2 = Sj
                 end
-                if engine <: GPUEngine
-                    env_S = [[CUDA.zeros(Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
-                else
-                    env_S = [[zeros(env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
-                end
+                env_S = [[zeros_like_engine(engine, Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
                 for e in env_enlarge
                     @. env_S[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * Sj2[e.ki, e.kj][e.τ2]
                 end
             elseif !isempty(Sj)
                 len = length(sys_αs)
                 if engine <: GPUEngine
-                    Sj2 = [CuArray.(Sj[i, j]) for i in 1 : len, j in 1 : len]
+                    Sj2 = [to_engine_array.(Ref(engine), Sj[i, j]) for i in 1 : len, j in 1 : len]
                 else
                     Sj2 = Sj
                 end
-                if engine <: GPUEngine
-                    sys_S = [[CUDA.zeros(Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
-                else
-                    sys_S = [[zeros(sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
-                end
+                sys_S = [[zeros_like_engine(engine, Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
                 for e in sys_enlarge
                     @. sys_S[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * Sj2[e.ki, e.kj][e.τ2]
                 end
@@ -423,11 +379,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                 SiSjΨ0 = deepcopy(Ψ0)
 
                 if rank == 0
-                    if engine <: GPUEngine
-                        Ψtemp = [[CUDA.zeros(Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                    else
-                        Ψtemp = [[zeros(env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                    end
+                    Ψtemp = [[zeros_like_engine(engine, Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
                 end
 
                 for s in superblock_H2
@@ -436,11 +388,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     if rank == root1
                         temp3 = Ψ0[s.env_in, s.sys_in][s.om1]
                     else
-                        if engine <: GPUEngine
-                            temp3 = CuMatrix{Float64}(undef, s.env_in_size, s.sys_in_size)
-                        else
-                            temp3 = Matrix{Float64}(undef, s.env_in_size, s.sys_in_size)
-                        end
+                        temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
                     end
 
                     if engine <: GPUEngine

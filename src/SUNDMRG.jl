@@ -18,6 +18,7 @@ export DMRGOutput, run_DMRG, make_table, make_table3nu, make_table4, HeisenbergM
 
 include("suncalc.jl")
 include("lanczos.jl")
+include("engine_utils.jl")
 include("block.jl")
 include("measurement.jl")
 include("step.jl")
