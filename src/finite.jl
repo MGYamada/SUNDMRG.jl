@@ -305,7 +305,7 @@ function _warmup_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_
     return blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, ES
 end
 
-function _growth_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, tensor_table, trmat_table, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
+function _growth_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, tensor_table, trmat_table, storage, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
     L = 2blockL.length
 
     if mirror
@@ -372,7 +372,7 @@ function _growth_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_
                             end
                         end
 
-                        env_tensor_dict = spin_operators!(tensor_table, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = lattice)
+                        env_tensor_dict = spin_operators!(storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
                     else
                         env_block = Block(L - sys_blocks[i].length - 1, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
                         env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
@@ -401,7 +401,7 @@ function _growth_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_
                         end
                     end
 
-                    env_tensor_dict = spin_operators!(tensor_table, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = lattice)
+                    env_tensor_dict = spin_operators!(storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
                 else
                     env_block = Block(L - sys_blocks[i].length - 2, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
                     env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
@@ -464,7 +464,7 @@ function _growth_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_
     return L, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, ES
 end
 
-function _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, block_table, tensor_table, trmat_table, Ly, L, Nc, m_sweep_list, m_cooldown, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, fileio, scratch, dirid, lattice, alg, correlation, margin, ES_max, tol_energy, tol_EE)
+function _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, block_table, tensor_table, trmat_table, storage, Ly, L, Nc, m_sweep_list, m_cooldown, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, fileio, scratch, dirid, lattice, alg, correlation, margin, ES_max, tol_energy, tol_EE)
     Ψ0 = Ψ[1]
 
     sys_label, env_label = :l, :r
@@ -490,7 +490,7 @@ function _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_bloc
             end
         end
 
-        env_tensor_dict = spin_operators!(tensor_table, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = lattice)
+        env_tensor_dict = spin_operators!(storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
     else
         env_block = Block(L - sys_block.length - 1, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
         env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
@@ -532,7 +532,7 @@ function _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_bloc
                     end
                 end
 
-                env_tensor_dict = spin_operators!(tensor_table, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = lattice)
+                env_tensor_dict = spin_operators!(storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
             else
                 env_block = Block(L - sys_block.length - 2, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
                 env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
@@ -603,9 +603,9 @@ function _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_bloc
     return ES, EE
 end
 
-function _finalize_runtime!(engine, fileio, scratch, dirid, comm)
-    if fileio
-        rm("$scratch/temp$dirid"; recursive = true)
+function _finalize_runtime!(engine, storage, rank, comm)
+    if rank == 0
+        cleanup_storage!(storage)
     end
 
     if engine <: GPUEngine
@@ -640,14 +640,15 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
     on_the_fly, mirror, γ_type, γ_list, N, signfactor = _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc, rank, Ncpu)
 
     m_list, errors, energies, EEs, EE, ES, SiSj, block_table, tensor_table, trmat_table, dirid, blockL, blockL_tensor_dict, blockR, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ = _init_state(engine, lattice, Lx, Ly, Nc, target, m_warmup, widthmax, tables, fileio, scratch, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor)
+    storage = _storage_backend(fileio, scratch, dirid, block_table, trmat_table, tensor_table)
 
     blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, ES = _warmup_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, trmat_table, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
 
-    L, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, ES = _growth_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, tensor_table, trmat_table, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
+    L, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, ES = _growth_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, tensor_table, trmat_table, storage, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
 
-    ES, EE = _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, block_table, tensor_table, trmat_table, Ly, L, Nc, m_sweep_list, m_cooldown, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, fileio, scratch, dirid, lattice, alg, correlation, margin, ES_max, tol_energy, tol_EE)
+    ES, EE = _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, block_table, tensor_table, trmat_table, storage, Ly, L, Nc, m_sweep_list, m_cooldown, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, fileio, scratch, dirid, lattice, alg, correlation, margin, ES_max, tol_energy, tol_EE)
 
-    _finalize_runtime!(engine, rank == 0 && fileio, scratch, dirid, comm)
+    _finalize_runtime!(engine, storage, rank, comm)
 
     ESrtn = Dict{NTuple{Nc, Int}, Vector{Float64}}()
     for (key, value) in ES
