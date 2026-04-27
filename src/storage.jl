@@ -1,0 +1,79 @@
+abstract type AbstractInternalStorage end
+
+struct MemoryInternalStorage{B, T, TT} <: AbstractInternalStorage
+    block_table::B
+    trmat_table::T
+    tensor_table::TT
+end
+
+struct JLD2InternalStorage <: AbstractInternalStorage
+    scratch::String
+    dirid
+end
+
+_storage_backend(fileio, scratch, dirid, block_table, trmat_table, tensor_table) = fileio ? JLD2InternalStorage(scratch, dirid) : MemoryInternalStorage(block_table, trmat_table, tensor_table)
+
+_block_filename(storage::JLD2InternalStorage, label, len) = "$(storage.scratch)/temp$(storage.dirid)/block_$(label)_$(len).jld2"
+_trmat_filename(storage::JLD2InternalStorage, label, len) = "$(storage.scratch)/temp$(storage.dirid)/trmat_$(label)_$(len).jld2"
+_tensor_filename(storage::JLD2InternalStorage, label, len, y) = "$(storage.scratch)/temp$(storage.dirid)/tensor_$(label)_$(len)_$(y).jld2"
+
+function load_block(storage::MemoryInternalStorage, label, len)
+    storage.block_table[label, len]
+end
+
+function save_block(storage::MemoryInternalStorage, label, len, block)
+    storage.block_table[label, len] = block
+end
+
+function load_trmat(storage::MemoryInternalStorage, label, len)
+    storage.trmat_table[label, len]
+end
+
+function save_trmat(storage::MemoryInternalStorage, label, len, trmat)
+    storage.trmat_table[label, len] = trmat
+end
+
+function load_tensor(storage::MemoryInternalStorage, label, len, y)
+    pop!(storage.tensor_table, (label, len, y), nothing)
+end
+
+function save_tensor(storage::MemoryInternalStorage, label, len, y, tensor)
+    storage.tensor_table[label, len, y] = tensor
+end
+
+function load_block(storage::JLD2InternalStorage, label, len)
+    load_object(_block_filename(storage, label, len))
+end
+
+function save_block(storage::JLD2InternalStorage, label, len, block)
+    jldsave(_block_filename(storage, label, len); env_block = block)
+end
+
+function load_trmat(storage::JLD2InternalStorage, label, len)
+    load_object(_trmat_filename(storage, label, len))::Vector{Matrix{Float64}}
+end
+
+function save_trmat(storage::JLD2InternalStorage, label, len, trmat)
+    jldsave(_trmat_filename(storage, label, len); env_trmat = trmat)
+end
+
+function load_tensor(storage::JLD2InternalStorage, label, len, y)
+    filename = _tensor_filename(storage, label, len, y)
+    if isfile(filename)
+        tensor = load_object(filename)::Matrix{Vector{Matrix{Float64}}}
+        rm(filename)
+        tensor
+    else
+        nothing
+    end
+end
+
+function save_tensor(storage::JLD2InternalStorage, label, len, y, tensor)
+    jldsave(_tensor_filename(storage, label, len, y); env_tensor_dict = tensor)
+end
+
+function cleanup_storage!(storage::JLD2InternalStorage)
+    rm("$(storage.scratch)/temp$(storage.dirid)"; recursive = true)
+end
+
+cleanup_storage!(::MemoryInternalStorage) = nothing

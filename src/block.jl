@@ -171,35 +171,21 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
 end
 
 """
-env_tensor_dict = spin_operators!(tensor_table, env, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = :square)
+env_tensor_dict = spin_operators!(storage, env, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = :square)
 generates spin operators for the environment
 """
-function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, fileio, scratch, dirid, block_table, trmat_table, on_the_fly, engine; lattice = :square) where Nc
+function spin_operators!(storage::AbstractInternalStorage, env::Block{Nc}, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = :square) where Nc
     env_tensor_dict = engine <: GPUEngine ? Dict{Int, Matrix{Vector{CuMatrix{Float64}}}}() : Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
     y_conn = (x -> x <= Ly ? x : 2Ly + 1 - x)(mod1(env.length, 2Ly))
     for y in 1 : min(env.length, Ly)
         if lattice != :honeycombZC || y == y_conn || ((mod1(env.length, 2Ly) <= Ly) ? y == 1 : y == Ly) || (y <= y_conn ? iseven(y) : isodd(y))
             if rank == 0
-                if fileio
-                    filename = "$scratch/temp$dirid/tensor_$(env_label)_$(env.length)_$y.jld2"
-                    if isfile(filename)
-                        spin = load_object(filename)::Matrix{Vector{Matrix{Float64}}}
-                        rm(filename)
-                    else
-                        spin = nothing
-                    end
-                else
-                    spin = pop!(tensor_table, (env_label, env.length, y), nothing)
-                end
+                spin = load_tensor(storage, env_label, env.length, y)
 
                 if isnothing(spin)
                     z = max(2Ly * ((env.length - y) ÷ 2Ly) + y, 2Ly * ((env.length - (1 - y)) ÷ 2Ly) + 1 - y)
 
-                    if fileio
-                        env_old = load_object("$scratch/temp$dirid/block_$(env_label)_$(z - 1).jld2")::Block{Nc}
-                    else
-                        env_old = block_table[env_label, z - 1]
-                    end
+                    env_old = load_block(storage, env_label, z - 1)::Block{Nc}
 
                     αs = copy(env_old.β_list)
                     lenα = length(αs)
@@ -235,11 +221,7 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
 
                     Snew = [to_engine_array.(Ref(engine), Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
 
-                    if fileio
-                        env_trmat = to_engine_array.(Ref(engine), load_object("$scratch/temp$dirid/trmat_$(env_label)_$z.jld2")::Vector{Matrix{Float64}})
-                    else
-                        env_trmat = to_engine_array.(Ref(engine), trmat_table[env_label, z])
-                    end
+                    env_trmat = to_engine_array.(Ref(engine), load_trmat(storage, env_label, z))
 
                     lennew = length(env_trmat)
                     ms = map(k -> size(env_trmat[k], 2), 1 : lennew)
@@ -247,17 +229,9 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
 
                     for x in z + 1 : env.length
                         if engine <: GPUEngine
-                            if fileio
-                                jldsave("$scratch/temp$dirid/tensor_$(env_label)_$(x - 1)_$y.jld2"; env_tensor_dict = [to_host_array.(Sold[ki, kj]) for ki in 1 : lennew, kj in 1 : lennew])
-                            else
-                                tensor_table[env_label, x - 1, y] = [to_host_array.(Sold[ki, kj]) for ki in 1 : lennew, kj in 1 : lennew]
-                            end
+                            save_tensor(storage, env_label, x - 1, y, [to_host_array.(Sold[ki, kj]) for ki in 1 : lennew, kj in 1 : lennew])
                         else
-                            if fileio
-                                jldsave("$scratch/temp$dirid/tensor_$(env_label)_$(x - 1)_$y.jld2"; env_tensor_dict = Sold)
-                            else
-                                tensor_table[env_label, x - 1, y] = deepcopy(Sold)
-                            end
+                            save_tensor(storage, env_label, x - 1, y, deepcopy(Sold))
                         end
 
                         αs = copy(βs)
@@ -289,11 +263,7 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
                             end
                         end
 
-                        if fileio
-                            env_trmat = to_engine_array.(Ref(engine), load_object("$scratch/temp$dirid/trmat_$(env_label)_$x.jld2")::Vector{Matrix{Float64}})
-                        else
-                            env_trmat = to_engine_array.(Ref(engine), trmat_table[env_label, x])
-                        end
+                        env_trmat = to_engine_array.(Ref(engine), load_trmat(storage, env_label, x))
         
                         lennew = length(env_trmat)
                         ms = map(k -> size(env_trmat[k], 2), 1 : lennew)
