@@ -86,7 +86,7 @@ function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup:
     end
 end
 
-function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc)
+function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc, rank, Ncpu)
     @assert Nc >= 2
 
     on_the_fly = Nc == 2
@@ -110,12 +110,6 @@ function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc)
         push!(γ_list, SUNIrrep{Nc}(ntuple(i -> 0 + (i <= h), Val(Nc))))
     end
 
-    MPI.Init_thread(MPI.THREAD_FUNNELED)
-
-    comm = MPI.COMM_WORLD
-    rank = MPI.Comm_rank(comm)
-    Ncpu = MPI.Comm_size(comm)
-
     if engine <: GPUEngine
         Ngpu = Int(length(devices()))
         @assert Ncpu <= Ngpu
@@ -125,7 +119,7 @@ function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc)
 
     N = Lx * Ly
     signfactor = iseven(Nc) ? -1.0 : 1.0
-    return on_the_fly, mirror, γ_type, γ_list, comm, rank, Ncpu, N, signfactor
+    return on_the_fly, mirror, γ_type, γ_list, N, signfactor
 end
 
 function _init_state(engine, lattice, Lx, Ly, Nc, target, m_warmup, widthmax, tables, fileio, scratch, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor)
@@ -618,15 +612,32 @@ function _finalize_runtime!(engine, fileio, scratch, dirid, comm)
         magma_finalize()
     end
 
-    MPI.Finalize()
+    _mpi_stop!()
 
+end
+
+function _mpi_start!()
+    MPI.Init_thread(MPI.THREAD_FUNNELED)
+end
+
+function _mpi_stop!()
+    MPI.Finalize()
+end
+
+function _comm_context()
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    Ncpu = MPI.Comm_size(comm)
+    return comm, rank, Ncpu
 end
 
 function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sweep_list, m_cooldown, engine; target = 0, widthmax = 0, tables = nothing, fileio = false, scratch = ".", ES_max = 20.0, tol_energy = 1e-5, tol_EE = 1e-3, correlation = :none, margin = 0, alg = :slow) where Nc
     @assert correlation == :none || correlation == :nn || correlation == :chain
     @assert alg == :slow || alg == :fast
 
-    on_the_fly, mirror, γ_type, γ_list, comm, rank, Ncpu, N, signfactor = _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc)
+    _mpi_start!()
+    comm, rank, Ncpu = _comm_context()
+    on_the_fly, mirror, γ_type, γ_list, N, signfactor = _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc, rank, Ncpu)
 
     m_list, errors, energies, EEs, EE, ES, SiSj, block_table, tensor_table, trmat_table, dirid, blockL, blockL_tensor_dict, blockR, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ = _init_state(engine, lattice, Lx, Ly, Nc, target, m_warmup, widthmax, tables, fileio, scratch, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor)
 
