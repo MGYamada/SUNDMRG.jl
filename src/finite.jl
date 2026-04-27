@@ -86,7 +86,7 @@ function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup:
     end
 end
 
-function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sweep_list, m_cooldown, engine; target = 0, widthmax = 0, tables = nothing, fileio = false, scratch = ".", ES_max = 20.0, tol_energy = 1e-5, tol_EE = 1e-3, correlation = :none, margin = 0, alg = :slow) where Nc
+function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc)
     @assert Nc >= 2
 
     on_the_fly = Nc == 2
@@ -94,9 +94,6 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
 
     @assert iseven(Lx)
     @assert lattice == :square || lattice == :honeycombZC
-    @assert correlation == :none || correlation == :nn || correlation == :chain
-    @assert alg == :slow || alg == :fast
-
     if on_the_fly
         @assert (Lx * Ly) % Nc == 0
     else
@@ -128,6 +125,10 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
 
     N = Lx * Ly
     signfactor = iseven(Nc) ? -1.0 : 1.0
+    return on_the_fly, mirror, γ_type, γ_list, comm, rank, Ncpu, N, signfactor
+end
+
+function _init_state(engine, lattice, Lx, Ly, Nc, target, widthmax, tables, fileio, scratch, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor)
     m_list = Tuple{Int, Float64}[]
     errors = Float64[]
     energies = Float64[]
@@ -236,6 +237,10 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
         end
     end
 
+    return m_list, errors, energies, EEs, EE, ES, SiSj, block_table, tensor_table, trmat_table, dirid, blockL, blockL_tensor_dict, blockR, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ
+end
+
+function _warmup_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, trmat_table, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
     while blockL.length < Ly
         if rank == 0
             if mirror
@@ -292,6 +297,10 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
         end
     end
 
+    return blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, ES
+end
+
+function _growth_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, tensor_table, trmat_table, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
     L = 2blockL.length
 
     if mirror
@@ -447,6 +456,10 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
         end
     end
 
+    return L, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, ES
+end
+
+function _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, block_table, tensor_table, trmat_table, Ly, L, Nc, m_sweep_list, m_cooldown, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, fileio, scratch, dirid, lattice, alg, correlation, margin, ES_max, tol_energy, tol_EE)
     Ψ0 = Ψ[1]
 
     sys_label, env_label = :l, :r
@@ -582,7 +595,11 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
         end
     end
 
-    if rank == 0 && fileio
+    return ES, EE
+end
+
+function _finalize_runtime!(engine, fileio, scratch, dirid, comm)
+    if fileio
         rm("$scratch/temp$dirid"; recursive = true)
     end
 
@@ -591,6 +608,24 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
     end
 
     MPI.Finalize()
+
+end
+
+function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sweep_list, m_cooldown, engine; target = 0, widthmax = 0, tables = nothing, fileio = false, scratch = ".", ES_max = 20.0, tol_energy = 1e-5, tol_EE = 1e-3, correlation = :none, margin = 0, alg = :slow) where Nc
+    @assert correlation == :none || correlation == :nn || correlation == :chain
+    @assert alg == :slow || alg == :fast
+
+    on_the_fly, mirror, γ_type, γ_list, comm, rank, Ncpu, N, signfactor = _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc)
+
+    m_list, errors, energies, EEs, EE, ES, SiSj, block_table, tensor_table, trmat_table, dirid, blockL, blockL_tensor_dict, blockR, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ = _init_state(engine, lattice, Lx, Ly, Nc, target, widthmax, tables, fileio, scratch, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor)
+
+    blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, ES = _warmup_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, trmat_table, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
+
+    L, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, ES = _growth_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, tensor_table, trmat_table, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
+
+    ES, EE = _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, block_table, tensor_table, trmat_table, Ly, L, Nc, m_sweep_list, m_cooldown, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, fileio, scratch, dirid, lattice, alg, correlation, margin, ES_max, tol_energy, tol_EE)
+
+    _finalize_runtime!(engine, rank == 0 && fileio, scratch, dirid, comm)
 
     ESrtn = Dict{NTuple{Nc, Int}, Vector{Float64}}()
     for (key, value) in ES
