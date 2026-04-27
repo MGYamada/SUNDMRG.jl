@@ -94,11 +94,7 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
         end
     end
 
-    if engine <: GPUEngine
-        tensor_dict[zy] = [CuArray.(Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
-    else
-        tensor_dict[zy] = Stemp
-    end
+    tensor_dict[zy] = [to_engine_array.(Ref(engine), Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
 
     if rank == 0
         y1 = (x -> x <= Ly ? x : 2Ly + 1 - x)(mod1(block.length, 2Ly))
@@ -114,11 +110,7 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
         fac2 = (Nc ^ 2 - 1) / sqrt(Nc) * signfactor
         bonds = copy(block.bonds)
         Hnew = map(1 : lenβ) do k
-            if engine <: GPUEngine
-                rtn = any(αβmatrix[:, k]) ? cat(CuArray.(block.scalar_dict[:H][αβmatrix[:, k]])...; dims = (1, 2)) : CUDA.zeros(Float64, 0, 0)
-            else
-                rtn = any(αβmatrix[:, k]) ? cat(block.scalar_dict[:H][αβmatrix[:, k]]...; dims = (1, 2)) : zeros(0, 0)
-            end
+            rtn = any(αβmatrix[:, k]) ? cat(to_engine_array.(Ref(engine), block.scalar_dict[:H][αβmatrix[:, k]])...; dims = (1, 2)) : zeros_like_engine(engine, Float64, 0, 0)
             for z in zlist
                 for i in 1 : lenα
                     if αβmatrix[i, k]
@@ -154,11 +146,7 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
             end
         end
     else
-        if engine <: GPUEngine
-            Hnew = [CuMatrix{Float64}(undef, m, m) for m in ms]
-        else
-            Hnew = [Matrix{Float64}(undef, m, m) for m in ms]
-        end
+        Hnew = [engine_matrix_type(engine)(undef, m, m) for m in ms]
     end
 
     for k in 1 : lenβ
@@ -245,24 +233,12 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
                         end
                     end
 
-                    if engine <: GPUEngine
-                        Snew = [CuArray.(Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
-                    else
-                        Snew = Stemp
-                    end
+                    Snew = [to_engine_array.(Ref(engine), Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
 
                     if fileio
-                        if engine <: GPUEngine
-                            env_trmat = CuArray.(load_object("$scratch/temp$dirid/trmat_$(env_label)_$z.jld2")::Vector{Matrix{Float64}})
-                        else
-                            env_trmat = load_object("$scratch/temp$dirid/trmat_$(env_label)_$z.jld2")::Vector{Matrix{Float64}}
-                        end
+                        env_trmat = to_engine_array.(Ref(engine), load_object("$scratch/temp$dirid/trmat_$(env_label)_$z.jld2")::Vector{Matrix{Float64}})
                     else
-                        if engine <: GPUEngine
-                            env_trmat = CuArray.(trmat_table[env_label, z])
-                        else
-                            env_trmat = trmat_table[env_label, z]
-                        end
+                        env_trmat = to_engine_array.(Ref(engine), trmat_table[env_label, z])
                     end
 
                     lennew = length(env_trmat)
@@ -272,9 +248,9 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
                     for x in z + 1 : env.length
                         if engine <: GPUEngine
                             if fileio
-                                jldsave("$scratch/temp$dirid/tensor_$(env_label)_$(x - 1)_$y.jld2"; env_tensor_dict = [Array.(Sold[ki, kj]) for ki in 1 : lennew, kj in 1 : lennew])
+                                jldsave("$scratch/temp$dirid/tensor_$(env_label)_$(x - 1)_$y.jld2"; env_tensor_dict = [to_host_array.(Sold[ki, kj]) for ki in 1 : lennew, kj in 1 : lennew])
                             else
-                                tensor_table[env_label, x - 1, y] = [Array.(Sold[ki, kj]) for ki in 1 : lennew, kj in 1 : lennew]
+                                tensor_table[env_label, x - 1, y] = [to_host_array.(Sold[ki, kj]) for ki in 1 : lennew, kj in 1 : lennew]
                             end
                         else
                             if fileio
@@ -300,11 +276,7 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
                         Snew = map([(i, j) for i in 1 : lenβ, j in 1 : lenβ]) do (i, j)
                             o1 = get(dp[j], βs[i], 0)
                             map(1 : o1) do τ1
-                                if engine <: GPUEngine
-                                    rtn = CUDA.zeros(Float64, ms[i], ms[j])
-                                else
-                                    rtn = zeros(ms[i], ms[j])
-                                end
+                                rtn = zeros_like_engine(engine, Float64, ms[i], ms[j])
                                 for ki in findall(αβmatrix[:, i]), kj in findall(αβmatrix[:, j])
                                     if haskey(dp2[kj], αs[ki])
                                         coeff = on_the_fly ? on_the_fly_calc1(Nc, (αs[kj], βs[j], αs[ki], βs[i])) : tables[1][αs[kj], βs[j], αs[ki], βs[i]]
@@ -318,17 +290,9 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
                         end
 
                         if fileio
-                            if engine <: GPUEngine
-                                env_trmat = CuArray.(load_object("$scratch/temp$dirid/trmat_$(env_label)_$x.jld2")::Vector{Matrix{Float64}})
-                            else
-                                env_trmat = load_object("$scratch/temp$dirid/trmat_$(env_label)_$x.jld2")::Vector{Matrix{Float64}}
-                            end
+                            env_trmat = to_engine_array.(Ref(engine), load_object("$scratch/temp$dirid/trmat_$(env_label)_$x.jld2")::Vector{Matrix{Float64}})
                         else
-                            if engine <: GPUEngine
-                                env_trmat = CuArray.(trmat_table[env_label, x])
-                            else
-                                env_trmat = trmat_table[env_label, x]
-                            end
+                            env_trmat = to_engine_array.(Ref(engine), trmat_table[env_label, x])
                         end
         
                         lennew = length(env_trmat)
@@ -337,7 +301,7 @@ function spin_operators!(tensor_table, env::Block{Nc}, env_label, Ly, widthmax, 
                     end
 
                     if engine <: GPUEngine
-                        spin = [Array.(Sold[ki, kj]) for ki in 1 : lennew, kj in 1 : lennew]
+                        spin = [to_host_array.(Sold[ki, kj]) for ki in 1 : lennew, kj in 1 : lennew]
                     else
                         spin = Sold
                     end

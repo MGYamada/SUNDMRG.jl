@@ -55,22 +55,14 @@ Lanczos_kernel!(Ψout, Ψin, x, y, sys_S, env_S, superblock_H2, OM, sys_len, env
 Function barrier
 """
 function Lanczos_kernel!(Ψout, Ψin, x, y, sys_S, env_S, superblock_H2, OM, sys_len, env_len, sys_ms, env_ms, comm, rank, Ncpu, engine)
-    if engine <: GPUEngine
-        Ψtemp = [[CUDA.zeros(Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-    else
-        Ψtemp = [[zeros(env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-    end
+    Ψtemp = [[zeros_like_engine(engine, Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
 
     for s in superblock_H2
         root1 = (s.sys_in + s.env_in - 2) % Ncpu
         if rank == root1
             temp3 = Ψin[s.env_in, s.sys_in][s.om1]
         else
-            if engine <: GPUEngine
-                temp3 = CuMatrix{Float64}(undef, s.env_in_size, s.sys_in_size)
-            else
-                temp3 = Matrix{Float64}(undef, s.env_in_size, s.sys_in_size)
-            end
+            temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
         end
         if engine <: GPUEngine
             CUDA.synchronize()
@@ -270,7 +262,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
 
             if x ∈ first.(bonds_hold)
                 if engine <: GPUEngine
-                    sys_tensor_dict_hold[x] = [CuArray.(Sold[i, j]) for i in 1 : len, j in 1 : len]
+                    sys_tensor_dict_hold[x] = [to_engine_array.(Ref(engine), Sold[i, j]) for i in 1 : len, j in 1 : len]
                 else
                     sys_tensor_dict_hold[x] = Sold
                 end
@@ -350,11 +342,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
             if x == x_conn
                 sys_S = sys_connS
             elseif x > 0
-                if engine <: GPUEngine
-                    sys_S = [[CUDA.zeros(Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
-                else
-                    sys_S = [[zeros(sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
-                end
+                sys_S = [[zeros_like_engine(engine, Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
                 for e in sys_enlarge
                     @. sys_S[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * sys_tensor_dict_hold[x][e.ki, e.kj][e.τ2]
                 end
@@ -365,11 +353,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
             if y == y_conn
                 env_S = env_connS
             elseif y > 0
-                if engine <: GPUEngine
-                    env_S = [[CUDA.zeros(Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
-                else
-                    env_S = [[zeros(env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
-                end
+                env_S = [[zeros_like_engine(engine, Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
                 for e in env_enlarge
                     @. env_S[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * env_tensor_dict_hold[y][e.ki, e.kj][e.τ2]
                 end
@@ -462,7 +446,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
             for k in 1 : len
                 fac = 1.0 / dimβ[k]
                 if engine <: GPUEngine
-                    ρ = CUDA.zeros(Float64, ms[k], ms[k])
+                    ρ = zeros_like_engine(engine, Float64, ms[k], ms[k])
                     for j in 1 : env_len
                         for J in eachindex(Ψ0[j, k])
                             CUBLAS.syrk!('U', 'T', fac, Ψ0[j, k][J], 1.0, ρ)
@@ -470,7 +454,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
                     end
                     CUDA.synchronize()
                 else
-                    ρ = zeros(ms[k], ms[k])
+                    ρ = zeros_like_engine(engine, Float64, ms[k], ms[k])
                     for j in 1 : env_len
                         for J in eachindex(Ψ0[j, k])
                             BLAS.syrk!('U', 'T', fac, Ψ0[j, k][J], 1.0, ρ)
@@ -486,7 +470,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
             for k in 1 : len
                 fac = 1.0 / dimβ[k]
                 if engine <: GPUEngine
-                    ρ = CUDA.zeros(Float64, ms[k], ms[k])
+                    ρ = zeros_like_engine(engine, Float64, ms[k], ms[k])
                     for j in 1 : sys_len
                         for J in eachindex(Ψ0[k, j])
                             CUBLAS.syrk!('U', 'N', fac, Ψ0[k, j][J], 1.0, ρ)
@@ -494,7 +478,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
                     end
                     CUDA.synchronize()
                 else
-                    ρ = zeros(ms[k], ms[k])
+                    ρ = zeros_like_engine(engine, Float64, ms[k], ms[k])
                     for j in 1 : sys_len
                         for J in eachindex(Ψ0[k, j])
                             BLAS.syrk!('U', 'N', fac, Ψ0[k, j][J], 1.0, ρ)
@@ -509,11 +493,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
         end
 
         if rank == 0 && α != 0.0
-            if engine <: GPUEngine
-                Sρs = [CUDA.zeros(Float64, ms[k], ms[k]) for k in 1 : len]
-            else
-                Sρs = [zeros(ms[k], ms[k]) for k in 1 : len]
-            end
+            Sρs = [zeros_like_engine(engine, Float64, ms[k], ms[k]) for k in 1 : len]
             for x in unique(map(x -> x[switch], superblock_bonds))
                 if x == conn
                     if switch == 1
@@ -549,11 +529,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
                             Sx = sys_tensor_dict[x]
                             # end
                         end
-                        if engine <: GPUEngine
-                            Stemp = [[CUDA.zeros(Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
-                        else
-                            Stemp = [[zeros(sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
-                        end
+                        Stemp = [[zeros_like_engine(engine, Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in 1 : sys_len, j in 1 : sys_len]
                         for e in sys_enlarge
                             @. Stemp[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * Sx[e.ki, e.kj][e.τ2]
                         end
@@ -568,11 +544,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
                             Sx = env_tensor_dict[x]
                             # end
                         end
-                        if engine <: GPUEngine
-                            Stemp = [[CUDA.zeros(Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
-                        else
-                            Stemp = [[zeros(env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
-                        end
+                        Stemp = [[zeros_like_engine(engine, Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in 1 : env_len, j in 1 : env_len]
                         for e in env_enlarge
                             @. Stemp[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * Sx[e.ki, e.kj][e.τ2]
                         end
@@ -611,11 +583,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
                 if rank == 0
                     MPI.Send(ρs[k], balancer[k], k, comm)
                 elseif rank == balancer[k]
-                    if engine <: GPUEngine
-                        ρ = CuMatrix{Float64}(undef, ms[k], ms[k])
-                    else
-                        ρ = Matrix{Float64}(undef, ms[k], ms[k])
-                    end
+                    ρ = engine_matrix_type(engine)(undef, ms[k], ms[k])
                     MPI.Recv!(ρ, 0, k, comm)
                     push!(ρnew, ρ)
                 end
@@ -674,11 +642,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
             Λ = sort!(collect(Iterators.flatten(reverse.(λ))), rev = true)
             λthreshold = m < length(Λ) ? Λ[m + 1] : -Inf
             indices = map(x -> x .> λthreshold, λ)
-            if engine <: GPUEngine
-                transformation_matrix = map(x -> CuArray(x[1][:, x[2]]), zip(ζ, indices))
-            else
-                transformation_matrix = map(x -> x[1][:, x[2]], zip(ζ, indices))
-            end
+            transformation_matrix = map(x -> to_engine_array(engine, x[1][:, x[2]]), zip(ζ, indices))
 
             msnew = map(x -> size(x, 2), transformation_matrix)
             if noisy && switch == 1
@@ -687,11 +651,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
             Hnew = map(x -> Array(x[2]' * (x[1] * x[2])), zip(block_enl.scalar_dict[:H], transformation_matrix))
         else
             push!(ee, 0.0)
-            if engine <: GPUEngine
-                transformation_matrix = [CuMatrix{Float64}(undef, 0, 0)]
-            else
-                transformation_matrix = [Matrix{Float64}(undef, 0, 0)]
-            end
+            transformation_matrix = [engine_matrix_type(engine)(undef, 0, 0)]
         end
         push!(trmat, transformation_matrix)
         push!(es, esi)
