@@ -305,7 +305,7 @@ function _warmup_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_
     return blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, ES
 end
 
-function _growth_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, tensor_table, trmat_table, storage, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
+function _growth_phase!(SiSj, blockL::Block{Nc}, blockR::Block{Nc}, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, tensor_table, trmat_table, storage, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg) where Nc
     L = 2blockL.length
 
     if mirror
