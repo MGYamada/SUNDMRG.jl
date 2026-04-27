@@ -128,7 +128,7 @@ function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc)
     return on_the_fly, mirror, γ_type, γ_list, comm, rank, Ncpu, N, signfactor
 end
 
-function _init_state(engine, lattice, Lx, Ly, Nc, target, widthmax, tables, fileio, scratch, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor)
+function _init_state(engine, lattice, Lx, Ly, Nc, target, m_warmup, widthmax, tables, fileio, scratch, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor)
     m_list = Tuple{Int, Float64}[]
     errors = Float64[]
     energies = Float64[]
@@ -617,7 +617,7 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
 
     on_the_fly, mirror, γ_type, γ_list, comm, rank, Ncpu, N, signfactor = _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc)
 
-    m_list, errors, energies, EEs, EE, ES, SiSj, block_table, tensor_table, trmat_table, dirid, blockL, blockL_tensor_dict, blockR, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ = _init_state(engine, lattice, Lx, Ly, Nc, target, widthmax, tables, fileio, scratch, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor)
+    m_list, errors, energies, EEs, EE, ES, SiSj, block_table, tensor_table, trmat_table, dirid, blockL, blockL_tensor_dict, blockR, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ = _init_state(engine, lattice, Lx, Ly, Nc, target, m_warmup, widthmax, tables, fileio, scratch, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor)
 
     blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, ES = _warmup_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, m_list, errors, energies, EEs, ES, block_table, trmat_table, Ly, N, m_warmup, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_type, γ_list, engine, mirror, fileio, scratch, dirid, lattice, alg)
 
