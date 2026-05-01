@@ -221,7 +221,7 @@ function spin_operators!(storage::AbstractInternalStorage, env::Block{Nc}, env_l
 
                     Snew = [to_engine_array.(Ref(engine), Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
 
-                    env_trmat = to_engine_array.(Ref(engine), load_trmat(storage, env_label, z))
+                    env_trmat = load_trmat(storage, env_label, z, engine)
 
                     lennew = length(env_trmat)
                     ms = map(k -> size(env_trmat[k], 2), 1 : lennew)
@@ -263,7 +263,7 @@ function spin_operators!(storage::AbstractInternalStorage, env::Block{Nc}, env_l
                             end
                         end
 
-                        env_trmat = to_engine_array.(Ref(engine), load_trmat(storage, env_label, x))
+                        env_trmat = load_trmat(storage, env_label, x, engine)
         
                         lennew = length(env_trmat)
                         ms = map(k -> size(env_trmat[k], 2), 1 : lennew)

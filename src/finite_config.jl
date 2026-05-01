@@ -1,0 +1,22 @@
+struct _FiniteRunConfig
+    lattice
+    Lx::Int
+    Ly::Int
+    N::Int
+    Nc::Int
+    m_warmup
+    m_sweep_list
+    m_cooldown
+    target
+    widthmax
+    tables
+    fileio::Bool
+    scratch
+    ES_max
+    tol_energy
+    tol_EE
+    correlation
+    margin
+    alg
+    verbose::Bool
+end
