@@ -11,7 +11,16 @@ struct JLD2InternalStorage <: AbstractInternalStorage
     dirid
 end
 
-_storage_backend(fileio, scratch, dirid, block_table, trmat_table, tensor_table) = fileio ? JLD2InternalStorage(scratch, dirid) : MemoryInternalStorage(block_table, trmat_table, tensor_table)
+function init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
+    if fileio
+        dirid = rank == 0 ? lpad(rand(0 : 99999), 5, "0") : 0
+        if rank == 0
+            mkdir("$scratch/temp$dirid")
+        end
+        return JLD2InternalStorage(scratch, dirid)
+    end
+    return MemoryInternalStorage(block_table, trmat_table, tensor_table)
+end
 
 _block_filename(storage::JLD2InternalStorage, label, len) = "$(storage.scratch)/temp$(storage.dirid)/block_$(label)_$(len).jld2"
 _trmat_filename(storage::JLD2InternalStorage, label, len) = "$(storage.scratch)/temp$(storage.dirid)/trmat_$(label)_$(len).jld2"
@@ -55,6 +64,22 @@ end
 
 function save_trmat(storage::JLD2InternalStorage, label, len, trmat)
     jldsave(_trmat_filename(storage, label, len); env_trmat = trmat)
+end
+
+function load_trmat(storage, label, len, engine)
+    to_engine_array.(Ref(engine), load_trmat(storage, label, len))
+end
+
+function load_block_and_trmat(storage, label, len, engine, ::Val{Nc}) where Nc
+    block = load_block(storage, label, len)::Block{Nc}
+    trmat = load_trmat(storage, label, len, engine)
+    return block, trmat
+end
+
+function save_block_and_trmat!(storage, label, block, trmat)
+    save_block(storage, label, block.length, block)
+    save_trmat(storage, label, block.length, Array.(trmat))
+    return nothing
 end
 
 function load_tensor(storage::JLD2InternalStorage, label, len, y)

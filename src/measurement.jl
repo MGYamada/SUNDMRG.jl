@@ -1,9 +1,77 @@
+function _store_sisj_bond!(SiSj, bond, sys_S, env_S, superblock_H2, OM, Ψ0, sys_len, env_len, sys_ms, env_ms, comm, rank, Ncpu, engine)
+    SiSjΨ0 = deepcopy(Ψ0)
+
+    if rank == 0
+        Ψtemp = [[zeros_like_engine(engine, Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
+    end
+
+    for s in superblock_H2
+        root1 = (s.sys_in + s.env_in - 2) % Ncpu
+
+        if rank == root1
+            temp3 = Ψ0[s.env_in, s.sys_in][s.om1]
+        else
+            temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
+        end
+
+        if engine <: GPUEngine
+            CUDA.synchronize()
+        end
+        if root1 != 0
+            if rank == root1
+                MPI.Send(temp3, 0, root1, comm)
+            end
+            if rank == 0
+                MPI.Recv!(temp3, root1, root1, comm)
+            end
+        end
+
+        if rank == 0
+            for m in s.miniblock
+                temp4 = env_S[m.env_out, s.env_in][m.env_τ] * (sys_S[m.sys_out, s.sys_in][m.sys_τ] * temp3')'
+                @. Ψtemp[m.env_out, m.sys_out][m.om2] += m.coeff * temp4
+            end
+        end
+    end
+
+    for ki in 1 : env_len, kj in 1 : sys_len
+        for om in 1 : OM[kj, ki]
+            root2 = (kj + ki - 2) % Ncpu
+            if engine <: GPUEngine
+                CUDA.synchronize()
+            end
+            if root2 != 0
+                if rank == 0
+                    MPI.Send(Ψtemp[ki, kj][om], root2, root2, comm)
+                end
+                if rank == root2
+                    MPI.Recv!(SiSjΨ0[ki, kj][om], 0, root2, comm)
+                end
+            elseif rank == 0
+                SiSjΨ0[ki, kj][om] .= Ψtemp[ki, kj][om]
+            end
+        end
+    end
+
+    sisj = MPI.Reduce(mydot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
+
+    if rank == 0
+        SiSj[bond] = sisj
+    else
+        SiSj[bond] = 0.0
+    end
+
+    SiSj
+end
+
 """
 tensor_dict, Sj = measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y_conn, sys_connS, env_connS, sys_len, env_len, sys_tensor_dict, env_tensor_dict, sys_tensor_dict_hold, env_tensor_dict_hold, sys_αs, env_αs, sys_βs, env_βs, sys_dp, env_dp, sys_ms, env_ms, sys_enlarge, env_enlarge, superblock_H2, OM, Ψ0, transformation_matrix, comm, rank, Ncpu, engine; correlation = :none, margin = 0, lattice = :square, Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0))
 measurement phase
 """
 function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y_conn, sys_connS, env_connS, sys_len, env_len, sys_tensor_dict, env_tensor_dict, sys_tensor_dict_hold, env_tensor_dict_hold, sys_αs, env_αs, sys_βs, env_βs, sys_dp, env_dp, sys_ms, env_ms, sys_enlarge, env_enlarge, superblock_H2, OM, Ψ0, transformation_matrix, comm, rank, Ncpu, engine; correlation = :none, margin = 0, lattice = :square, Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0))
     tensor_dict = engine <: GPUEngine ? Dict{Int, Matrix{Vector{CuMatrix{Float64}}}}() : Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
+    sys_S = nothing
+    env_S = nothing
 
     for x in 1 : min(sys_enl.length, Ly)
         if rank == 0 && (lattice != :honeycombZC || x == x_conn || ((mod1(sys.length, 2Ly) <= Ly) ? x == 1 : x == Ly) || (x <= x_conn ? iseven(x) : isodd(x)))
@@ -60,67 +128,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     end
                 end
 
-                SiSjΨ0 = deepcopy(Ψ0)
-
-                if rank == 0
-                    Ψtemp = [[zeros_like_engine(engine, Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                end
-
-                for s in superblock_H2
-                    root1 = (s.sys_in + s.env_in - 2) % Ncpu
-
-                    if rank == root1
-                        temp3 = Ψ0[s.env_in, s.sys_in][s.om1]
-                    else
-                        temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
-                    end
-
-                    if engine <: GPUEngine
-                        CUDA.synchronize()
-                    end
-                    if root1 != 0
-                        if rank == root1
-                            MPI.Send(temp3, 0, root1, comm)
-                        end
-                        if rank == 0
-                            MPI.Recv!(temp3, root1, root1, comm)
-                        end
-                    end
-
-                    if rank == 0
-                        for m in s.miniblock
-                            temp4 = env_S[m.env_out, s.env_in][m.env_τ] * (sys_S[m.sys_out, s.sys_in][m.sys_τ] * temp3')'
-                            @. Ψtemp[m.env_out, m.sys_out][m.om2] += m.coeff * temp4
-                        end
-                    end
-                end
-
-                for ki in 1 : env_len, kj in 1 : sys_len
-                    for om in 1 : OM[kj, ki]
-                        root2 = (kj + ki - 2) % Ncpu
-                        if engine <: GPUEngine
-                            CUDA.synchronize()
-                        end
-                        if root2 != 0
-                            if rank == 0
-                                MPI.Send(Ψtemp[ki, kj][om], root2, root2, comm)
-                            end
-                            if rank == root2
-                                MPI.Recv!(SiSjΨ0[ki, kj][om], 0, root2, comm)
-                            end
-                        elseif rank == 0
-                            SiSjΨ0[ki, kj][om] .= Ψtemp[ki, kj][om]
-                        end
-                    end
-                end
-
-                sisj = MPI.Reduce(mydot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
-
-                if rank == 0
-                    SiSj[bond] = sisj
-                else
-                    SiSj[bond] = 0.0
-                end
+                _store_sisj_bond!(SiSj, bond, sys_S, env_S, superblock_H2, OM, Ψ0, sys_len, env_len, sys_ms, env_ms, comm, rank, Ncpu, engine)
 
             elseif env_enl.length % Ly == 0 && (lattice != :honeycombZC || (x_conn == 1 ? isodd(x) : iseven(x)))
                 if rank == 0
@@ -150,67 +158,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                     end
                 end
 
-                SiSjΨ0 = deepcopy(Ψ0)
-
-                if rank == 0
-                    Ψtemp = [[zeros_like_engine(engine, Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                end
-
-                for s in superblock_H2
-                    root1 = (s.sys_in + s.env_in - 2) % Ncpu
-
-                    if rank == root1
-                        temp3 = Ψ0[s.env_in, s.sys_in][s.om1]
-                    else
-                        temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
-                    end
-
-                    if engine <: GPUEngine
-                        CUDA.synchronize()
-                    end
-                    if root1 != 0
-                        if rank == root1
-                            MPI.Send(temp3, 0, root1, comm)
-                        end
-                        if rank == 0
-                            MPI.Recv!(temp3, root1, root1, comm)
-                        end
-                    end
-
-                    if rank == 0
-                        for m in s.miniblock
-                            temp4 = env_S[m.env_out, s.env_in][m.env_τ] * (sys_S[m.sys_out, s.sys_in][m.sys_τ] * temp3')'
-                            @. Ψtemp[m.env_out, m.sys_out][m.om2] += m.coeff * temp4
-                        end
-                    end
-                end
-
-                for ki in 1 : env_len, kj in 1 : sys_len
-                    for om in 1 : OM[kj, ki]
-                        root2 = (kj + ki - 2) % Ncpu
-                        if engine <: GPUEngine
-                            CUDA.synchronize()
-                        end
-                        if root2 != 0
-                            if rank == 0
-                                MPI.Send(Ψtemp[ki, kj][om], root2, root2, comm)
-                            end
-                            if rank == root2
-                                MPI.Recv!(SiSjΨ0[ki, kj][om], 0, root2, comm)
-                            end
-                        elseif rank == 0
-                            SiSjΨ0[ki, kj][om] .= Ψtemp[ki, kj][om]
-                        end
-                    end
-                end
-
-                sisj = MPI.Reduce(mydot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
-
-                if rank == 0
-                    SiSj[bond] = sisj
-                else
-                    SiSj[bond] = 0.0
-                end
+                _store_sisj_bond!(SiSj, bond, sys_S, env_S, superblock_H2, OM, Ψ0, sys_len, env_len, sys_ms, env_ms, comm, rank, Ncpu, engine)
             end
 
             if Ly > 2 && sys_label == :r && env_enl.length % Ly != 0
@@ -239,67 +187,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                         end
                     end
 
-                    SiSjΨ0 = deepcopy(Ψ0)
-
-                    if rank == 0
-                        Ψtemp = [[zeros_like_engine(engine, Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                    end
-
-                    for s in superblock_H2
-                        root1 = (s.sys_in + s.env_in - 2) % Ncpu
-
-                        if rank == root1
-                            temp3 = Ψ0[s.env_in, s.sys_in][s.om1]
-                        else
-                            temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
-                        end
-
-                        if engine <: GPUEngine
-                            CUDA.synchronize()
-                        end
-                        if root1 != 0
-                            if rank == root1
-                                MPI.Send(temp3, 0, root1, comm)
-                            end
-                            if rank == 0
-                                MPI.Recv!(temp3, root1, root1, comm)
-                            end
-                        end
-
-                        if rank == 0
-                            for m in s.miniblock
-                                temp4 = env_S[m.env_out, s.env_in][m.env_τ] * (sys_S[m.sys_out, s.sys_in][m.sys_τ] * temp3')'
-                                @. Ψtemp[m.env_out, m.sys_out][m.om2] += m.coeff * temp4
-                            end
-                        end
-                    end
-
-                    for ki in 1 : env_len, kj in 1 : sys_len
-                        for om in 1 : OM[kj, ki]
-                            root2 = (kj + ki - 2) % Ncpu
-                            if engine <: GPUEngine
-                                CUDA.synchronize()
-                            end
-                            if root2 != 0
-                                if rank == 0
-                                    MPI.Send(Ψtemp[ki, kj][om], root2, root2, comm)
-                                end
-                                if rank == root2
-                                    MPI.Recv!(SiSjΨ0[ki, kj][om], 0, root2, comm)
-                                end
-                            elseif rank == 0
-                                SiSjΨ0[ki, kj][om] .= Ψtemp[ki, kj][om]
-                            end
-                        end
-                    end
-
-                    sisj = MPI.Reduce(mydot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
-
-                    if rank == 0
-                        SiSj[bond] = sisj
-                    else
-                        SiSj[bond] = 0.0
-                    end
+                    _store_sisj_bond!(SiSj, bond, sys_S, env_S, superblock_H2, OM, Ψ0, sys_len, env_len, sys_ms, env_ms, comm, rank, Ncpu, engine)
                 end
             end
         end
@@ -376,67 +264,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
             end
 
             if (sys_label == :l && sys.length == 0) || y_conn == 1 || (lattice == :honeycombZC && y_conn <= 2)
-                SiSjΨ0 = deepcopy(Ψ0)
-
-                if rank == 0
-                    Ψtemp = [[zeros_like_engine(engine, Float64, env_ms[ki], sys_ms[kj]) for J in 1 : OM[kj, ki]] for ki in 1 : env_len, kj in 1 : sys_len]
-                end
-
-                for s in superblock_H2
-                    root1 = (s.sys_in + s.env_in - 2) % Ncpu
-
-                    if rank == root1
-                        temp3 = Ψ0[s.env_in, s.sys_in][s.om1]
-                    else
-                        temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
-                    end
-
-                    if engine <: GPUEngine
-                        CUDA.synchronize()
-                    end
-                    if root1 != 0
-                        if rank == root1
-                            MPI.Send(temp3, 0, root1, comm)
-                        end
-                        if rank == 0
-                            MPI.Recv!(temp3, root1, root1, comm)
-                        end
-                    end
-
-                    if rank == 0
-                        for m in s.miniblock
-                            temp4 = env_S[m.env_out, s.env_in][m.env_τ] * (sys_S[m.sys_out, s.sys_in][m.sys_τ] * temp3')'
-                            @. Ψtemp[m.env_out, m.sys_out][m.om2] += m.coeff * temp4
-                        end
-                    end
-                end
-
-                for ki in 1 : env_len, kj in 1 : sys_len
-                    for om in 1 : OM[kj, ki]
-                        root2 = (kj + ki - 2) % Ncpu
-                        if engine <: GPUEngine
-                            CUDA.synchronize()
-                        end
-                        if root2 != 0
-                            if rank == 0
-                                MPI.Send(Ψtemp[ki, kj][om], root2, root2, comm)
-                            end
-                            if rank == root2
-                                MPI.Recv!(SiSjΨ0[ki, kj][om], 0, root2, comm)
-                            end
-                        elseif rank == 0
-                            SiSjΨ0[ki, kj][om] .= Ψtemp[ki, kj][om]
-                        end
-                    end
-                end
-
-                sisj = MPI.Reduce(mydot(Ψ0, SiSjΨ0), MPI.SUM, 0, comm)
-
-                if rank == 0
-                    SiSj[bond] = sisj
-                else
-                    SiSj[bond] = 0.0
-                end
+                _store_sisj_bond!(SiSj, bond, sys_S, env_S, superblock_H2, OM, Ψ0, sys_len, env_len, sys_ms, env_ms, comm, rank, Ncpu, engine)
             end
 
             if rank == 0
