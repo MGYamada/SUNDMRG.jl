@@ -1,3 +1,34 @@
+function _record_phase_result!(m_list, errors, energies, EEs, m, result::DMRGStepResult)
+    push!(m_list, m)
+    push!(errors, result.trerr)
+    push!(energies, result.energy)
+    push!(EEs, result.ee)
+    return result.es
+end
+
+function _log_phase_result(runtime::_FiniteRuntime, verbose, energy, L, ee)
+    if verbose
+        root_println(runtime, "E / N = ", energy / L)
+        root_println(runtime, "E     = ", energy)
+        root_println(runtime, "S_EE  = ", ee)
+    end
+    return nothing
+end
+
+function _save_edge_blocks!(storage, mirror, left_block, left_trmat, right_block, right_trmat, runtime::_FiniteRuntime)
+    if !isroot(runtime)
+        return nothing
+    end
+
+    save_block_and_trmat!(storage, :l, left_block, left_trmat)
+    if mirror
+        save_block_and_trmat!(storage, :r, left_block, left_trmat)
+    else
+        save_block_and_trmat!(storage, :r, right_block, right_trmat)
+    end
+    return nothing
+end
+
 function _init_state(config::_FiniteRunConfig, runtime::_FiniteRuntime)
     (; lattice, Lx, Ly, Nc, target, m_warmup, widthmax, tables, fileio, scratch, verbose) = config
     (; engine, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor) = runtime
@@ -14,71 +45,57 @@ function _init_state(config::_FiniteRunConfig, runtime::_FiniteRuntime)
     tensor_table = Dict{Tuple{Symbol, Int, Int}, Matrix{Vector{Matrix{Float64}}}}()
     trmat_table = Dict{Tuple{Symbol, Int}, Vector{Matrix{Float64}}}()
 
-    if rank == 0
+    if isroot(runtime)
         if verbose
-            println(repeat("-", 60))
-            println("SU($Nc) DMRG simulation on the $Lx x $Ly $lattice lattice cylinder:")
+            root_println(runtime, repeat("-", 60))
+            root_println(runtime, "SU($Nc) DMRG simulation on the $Lx x $Ly $lattice lattice cylinder:")
             if on_the_fly
-                println("All representations are used in the calculation.")
+                root_println(runtime, "All representations are used in the calculation.")
             else
                 irreps = irreplist(Nc, widthmax)
-                println(length(irreps), " irreps from ", weight(first(irreps)), " to ", weight(last(irreps)), " are used in the calculation.")
+                root_println(runtime, length(irreps), " irreps from ", weight(first(irreps)), " to ", weight(last(irreps)), " are used in the calculation.")
             end
-            println(target == 0 ? "The ground state" : "The excited state #$target", " will be calculated.")
-            println(repeat("-", 60))
+            root_println(runtime, target == 0 ? "The ground state" : "The excited state #$target", " will be calculated.")
+            root_println(runtime, repeat("-", 60))
         end
 
         storage = init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
 
         blockL = Block(0, Tuple{Int, Int}[], [trivialirrep(Val(Nc))], [1], [1], Dict{Symbol, Vector{Matrix{Float64}}}(:H => [zeros(1, 1)]))
         blockL_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
-        if engine <: GPUEngine
-            trmatL = [CuArray(diagm([1.0]))]
-        else
-            trmatL = [diagm([1.0])]
-        end
+        trmatL = [to_engine_array(engine, diagm([1.0]))]
 
         if !mirror
             blockR = Block(0, Tuple{Int, Int}[], [trivialirrep(Val(Nc))], [1], [1], Dict{Symbol, Vector{Matrix{Float64}}}(:H => [zeros(1, 1)]))
             blockR_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
-            if engine <: GPUEngine
-                trmatR = [CuArray(diagm([1.0]))]
-            else
-                trmatR = [diagm([1.0])]
-            end
+            trmatR = [to_engine_array(engine, diagm([1.0]))]
         else
             blockR = blockL
             blockR_tensor_dict = blockL_tensor_dict
             trmatR = trmatL
         end
 
-        if mirror
-            save_block_and_trmat!(storage, :l, blockL, trmatL)
-            save_block_and_trmat!(storage, :r, blockL, trmatL)
-        else
-            save_block_and_trmat!(storage, :l, blockL, trmatL)
-            save_block_and_trmat!(storage, :r, blockR, trmatR)
-        end
+        _save_edge_blocks!(storage, mirror, blockL, trmatL, blockR, trmatR, runtime)
 
         if verbose
-            println("#")
-            println("# Warming up with (m, α) = ", m_warmup)
-            println("#")
+            root_println(runtime, "#")
+            root_println(runtime, "# Warming up with (m, α) = ", m_warmup)
+            root_println(runtime, "#")
         end
     else
         storage = init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
         blockL = Block(0, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
-        blockL_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
-        trmatL = Matrix{Float64}[]
+        blockL_tensor_dict = empty_engine_tensor_dict(engine)
+        trmatL = empty_engine_matrix_vector(engine)
 
         if !mirror
             blockR = Block(0, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
-            blockR_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
-            trmatR = Matrix{Float64}[]
+            blockR_tensor_dict = empty_engine_tensor_dict(engine)
+            trmatR = empty_engine_matrix_vector(engine)
         else
             blockR = blockL
             blockR_tensor_dict = blockL_tensor_dict
-            trmatR = Matrix{Float64}[]
+            trmatR = empty_engine_matrix_vector(engine)
         end
     end
 
@@ -89,19 +106,7 @@ function _init_state(config::_FiniteRunConfig, runtime::_FiniteRuntime)
         blockR_enl = blockL_enl
     end
 
-    if engine <: GPUEngine
-        if mirror
-            Ψ = [Matrix{Vector{CuMatrix{Float64}}}(undef, 0, 0)]
-        else
-            Ψ = [Matrix{Vector{CuMatrix{Float64}}}(undef, 0, 0), Matrix{Vector{CuMatrix{Float64}}}(undef, 0, 0)]
-        end
-    else
-        if mirror
-            Ψ = [Matrix{Vector{Matrix{Float64}}}(undef, 0, 0)]
-        else
-            Ψ = [Matrix{Vector{Matrix{Float64}}}(undef, 0, 0), Matrix{Vector{Matrix{Float64}}}(undef, 0, 0)]
-        end
-    end
+    Ψ = empty_engine_tensor_matrices(engine, mirror ? 1 : 2)
 
     return m_list, errors, energies, EEs, EE, ES, SiSj, storage, blockL, blockL_tensor_dict, blockR, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ
 end
@@ -111,11 +116,11 @@ function _warmup_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_
     (; engine, comm, rank, Ncpu, on_the_fly, mirror, γ_list, signfactor) = runtime
 
     while blockL.length < Ly
-        if verbose && rank == 0
+        if verbose && isroot(runtime)
             if mirror
-                println(graphic(blockL, blockL))
+                root_println(runtime, graphic(blockL, blockL))
             else
-                println(graphic(blockL, blockR))
+                root_println(runtime, graphic(blockL, blockR))
             end
         end
 
@@ -130,27 +135,11 @@ function _warmup_phase!(SiSj, blockL, blockR, blockL_tensor_dict, blockR_tensor_
         end
 
         if 2blockL.length == N
-            push!(m_list, m_warmup)
-            push!(errors, trerr)
-            push!(energies, energy)
-            push!(EEs, ee)
-            ES = es
+            ES = _record_phase_result!(m_list, errors, energies, EEs, m_warmup, result)
         end
 
-        if verbose && rank == 0
-            println("E / N = ", energy / 2blockL.length)
-            println("E     = ", energy)
-            println("S_EE  = ", ee)
-        end
-        if rank == 0
-            if mirror
-                save_block_and_trmat!(storage, :l, blockL, trmatL)
-                save_block_and_trmat!(storage, :r, blockL, trmatL)
-            else
-                save_block_and_trmat!(storage, :l, blockL, trmatL)
-                save_block_and_trmat!(storage, :r, blockR, trmatR)
-            end
-        end
+        _log_phase_result(runtime, verbose, energy, 2blockL.length, ee)
+        _save_edge_blocks!(storage, mirror, blockL, trmatL, blockR, trmatR, runtime)
     end
 
     return blockL, blockR, blockL_tensor_dict, blockR_tensor_dict, blockL_enl, blockR_enl, trmatL, trmatR, Ψ, ES
@@ -180,11 +169,11 @@ function _growth_phase!(SiSj, blockL::Block{Nc}, blockR::Block{Nc}, blockL_tenso
 
     while L < N
         if sys_block_enls[1].length % Ly == 0
-            if verbose && rank == 0
+            if verbose && isroot(runtime)
                 if mirror
-                    println(graphic(sys_blocks[1], sys_blocks[1]; sys_label = :l))
+                    root_println(runtime, graphic(sys_blocks[1], sys_blocks[1]; sys_label = :l))
                 else
-                    println(graphic(sys_blocks[1], sys_blocks[2]; sys_label = :l))
+                    root_println(runtime, graphic(sys_blocks[1], sys_blocks[2]; sys_label = :l))
                 end
             end
 
@@ -199,11 +188,7 @@ function _growth_phase!(SiSj, blockL::Block{Nc}, blockR::Block{Nc}, blockL_tenso
                 Ψ[2] = wavefunction_reverse(Ψ[1], :l, sys_blocks[1], sys_blocks[2], widthmax, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine)
             end
 
-            if verbose && rank == 0
-                println("E / N = ", energy / L)
-                println("E     = ", energy)
-                println("S_EE  = ", ee)
-            end
+            _log_phase_result(runtime, verbose, energy, L, ee)
         else
             for i in 1 : (mirror ? 1 : 2)
                 if i == 1
@@ -212,14 +197,14 @@ function _growth_phase!(SiSj, blockL::Block{Nc}, blockR::Block{Nc}, blockL_tenso
                     sys_label, env_label = :r, :l
                 end
                 if sys_blocks[i].length % Ly == 0
-                    if rank == 0
+                    if isroot(runtime)
                         env_block, env_trmats[i] = load_block_and_trmat(storage, env_label, L - sys_blocks[i].length - 1, engine, Val(Nc))
 
                         env_tensor_dict = spin_operators!(storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
                     else
                         env_block = Block(L - sys_blocks[i].length - 1, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
-                        env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
-                        env_trmats[i] = Matrix{Float64}[]
+                        env_tensor_dict = empty_engine_tensor_dict(engine)
+                        env_trmats[i] = empty_engine_matrix_vector(engine)
                     end
 
                     env_block_enls[i] = enlarge_block(env_block, env_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
@@ -227,50 +212,34 @@ function _growth_phase!(SiSj, blockL::Block{Nc}, blockR::Block{Nc}, blockL_tenso
 
                 Ψ0_guess = eig_prediction(Ψ[i], sys_label, sys_block_enls[i], env_block_enls[i], sys_trmats[i], env_trmats[i], widthmax, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine)
 
-                if rank == 0
+                if isroot(runtime)
                     env_block, env_trmats[i] = load_block_and_trmat(storage, env_label, L - sys_blocks[i].length - 2, engine, Val(Nc))
 
                     env_tensor_dict = spin_operators!(storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
                 else
                     env_block = Block(L - sys_blocks[i].length - 2, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
-                    env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
-                    env_trmats[i] = Matrix{Float64}[]
+                    env_tensor_dict = empty_engine_tensor_dict(engine)
+                    env_trmats[i] = empty_engine_matrix_vector(engine)
                 end
 
                 env_block_enls[i] = enlarge_block(env_block, env_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
 
-                if verbose && i == 1 && rank == 0
-                    println(graphic(sys_blocks[i], env_block; sys_label = sys_label))
+                if verbose && i == 1
+                    root_println(runtime, graphic(sys_blocks[i], env_block; sys_label = sys_label))
                 end
 
                 result = dmrg_step_result!(SiSj, sys_label, sys_blocks[i], env_block, sys_tensor_dicts[i], env_tensor_dict, sys_block_enls[i], env_block_enls[i], Ly, m_warmup..., widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, Val(false); Ψ0_guess = Ψ0_guess, lattice = lattice, alg = alg, noisy = verbose && i == 1)
                 sys_blocks[i], sys_tensor_dicts[i], sys_block_enls[i], trerr, energy, Ψ[i], sys_trmats[i], ee, es = result.block, result.tensor_dict, result.block_enl, result.trerr, result.energy, result.Ψ, result.trmat, result.ee, result.es
 
-                if verbose && i == 1 && rank == 0
-                    println("E / N = ", energy / L)
-                    println("E     = ", energy)
-                    println("S_EE  = ", ee)
-                end
+                _log_phase_result(runtime, verbose && i == 1, energy, L, ee)
             end
         end
 
         if L == N
-            push!(m_list, m_warmup)
-            push!(errors, trerr)
-            push!(energies, energy)
-            push!(EEs, ee)
-            ES = es
+            ES = _record_phase_result!(m_list, errors, energies, EEs, m_warmup, result)
         end
 
-        if rank == 0
-            if mirror
-                save_block_and_trmat!(storage, :l, sys_blocks[1], sys_trmats[1])
-                save_block_and_trmat!(storage, :r, sys_blocks[1], sys_trmats[1])
-            else
-                save_block_and_trmat!(storage, :l, sys_blocks[1], sys_trmats[1])
-                save_block_and_trmat!(storage, :r, sys_blocks[2], sys_trmats[2])
-            end
-        end
+        _save_edge_blocks!(storage, mirror, sys_blocks[1], sys_trmats[1], sys_blocks[end], sys_trmats[end], runtime)
     end
 
     return L, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, ES
@@ -284,14 +253,14 @@ function _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_bloc
     measurement = false
 
     for m in Iterators.flatten([m_sweep_list, Iterators.repeated(m_cooldown)])
-        if verbose && rank == 0
-            println("#")
+        if verbose
+            root_println(runtime, "#")
             if measurement
-                println("# Measurement step with (m, α) = ", m)
+                root_println(runtime, "# Measurement step with (m, α) = ", m)
             else
-                println("# Performing sweep with (m, α) = ", m)
+                root_println(runtime, "# Performing sweep with (m, α) = ", m)
             end
-            println("#")
+            root_println(runtime, "#")
         end
         while true
             result = _sweep_step!(SiSj, state, EE, storage, L, m, measurement, config, runtime, Val(Nc))

@@ -20,22 +20,27 @@ return `nothing` for the output.
 """
 function run_DMRG end
 
+_dmrg_schedule(m::Int) = (m, 0.0)
+_dmrg_schedule(m::Tuple{Int, Float64}) = m
+_dmrg_schedule_list(ms::Vector{Int}) = _dmrg_schedule.(ms)
+_dmrg_schedule_list(ms::Vector{Tuple{Int, Float64}}) = ms
+
 function run_DMRG(model::HeisenbergModelSU{Nc}, lat::SquareLattice, m_warmup::Int, m_sweep_list::Vector{Int}, m_cooldown::Int, engine::Type{<:Engine}; kwargs...) where Nc
-    _run_DMRG(model, :square, lat.Lx, lat.Ly, (m_warmup, 0.0), map(x -> (x, 0.0), m_sweep_list), (m_cooldown, 0.0), engine; kwargs...)
+    _run_DMRG(model, :square, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
 end
 
 function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup::Int, m_sweep_list::Vector{Int}, m_cooldown::Int, engine::Type{<:Engine}; kwargs...) where Nc
     if lat.BC == :ZC
-        _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, (m_warmup, 0.0), map(x -> (x, 0.0), m_sweep_list), (m_cooldown, 0.0), engine; kwargs...)
+        _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
     end
 end
 
 function run_DMRG(model::HeisenbergModelSU{Nc}, lat::SquareLattice, m_warmup::Tuple{Int, Float64}, m_sweep_list::Vector{Tuple{Int, Float64}}, m_cooldown::Tuple{Int, Float64}, engine::Type{<:Engine}; kwargs...) where Nc
-    _run_DMRG(model, :square, lat.Lx, lat.Ly, m_warmup, m_sweep_list, m_cooldown, engine; kwargs...)
+    _run_DMRG(model, :square, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
 end
 
 function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup::Tuple{Int, Float64}, m_sweep_list::Vector{Tuple{Int, Float64}}, m_cooldown::Tuple{Int, Float64}, engine::Type{<:Engine}; kwargs...) where Nc
     if lat.BC == :ZC
-        _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, m_warmup, m_sweep_list, m_cooldown, engine; kwargs...)
+        _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
     end
 end

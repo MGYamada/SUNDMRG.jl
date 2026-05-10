@@ -36,21 +36,33 @@ function _comm_context()
     return comm, rank, Ncpu
 end
 
+isroot(rank::Integer) = rank == 0
+isroot(runtime::_FiniteRuntime) = isroot(runtime.rank)
+
+function root_println(rank::Integer, args...)
+    if isroot(rank)
+        println(args...)
+    end
+    return nothing
+end
+
+root_println(runtime::_FiniteRuntime, args...) = root_println(runtime.rank, args...)
+
 function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc, rank, Ncpu)
-    @assert Nc >= 2
+    Nc >= 2 || throw(ArgumentError("Nc must be at least 2"))
 
     on_the_fly = Nc == 2
     mirror = lattice == :square || lattice == :honeycombZC
 
-    @assert iseven(Lx)
-    @assert lattice == :square || lattice == :honeycombZC
+    iseven(Lx) || throw(ArgumentError("Lx must be even"))
+    lattice ∈ (:square, :honeycombZC) || throw(ArgumentError("lattice must be :square or :honeycombZC"))
     if on_the_fly
-        @assert (Lx * Ly) % Nc == 0
+        (Lx * Ly) % Nc == 0 || throw(ArgumentError("Lx * Ly must be divisible by Nc"))
     else
         if iseven(Nc)
-            @assert Ly % (Nc >> 1) == 0
+            Ly % (Nc >> 1) == 0 || throw(ArgumentError("Ly must be divisible by Nc ÷ 2 for even Nc > 2"))
         else
-            @assert Ly % Nc == 0
+            Ly % Nc == 0 || throw(ArgumentError("Ly must be divisible by Nc for odd Nc"))
         end
     end
 
@@ -62,7 +74,7 @@ function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc, rank, Ncpu)
 
     if engine <: GPUEngine
         Ngpu = Int(length(devices()))
-        @assert Ncpu <= Ngpu
+        Ncpu <= Ngpu || throw(ArgumentError("Ncpu must be less than or equal to the number of GPUs"))
         device!(rank)
         magma_init()
     end
@@ -70,6 +82,12 @@ function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc, rank, Ncpu)
     N = Lx * Ly
     signfactor = iseven(Nc) ? -1.0 : 1.0
     return on_the_fly, mirror, γ_type, γ_list, N, signfactor
+end
+
+function _finalize_runtime!(engine, ::Nothing, rank)
+    if engine <: GPUEngine
+        magma_finalize()
+    end
 end
 
 function _finalize_runtime!(engine, storage, rank)

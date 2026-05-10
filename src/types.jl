@@ -47,8 +47,8 @@ struct HoneycombLattice <: Lattice{2}
     Ly::Int
     BC::Symbol
     function HoneycombLattice(Lx, Ly, BC)
-        @assert iseven(Ly)
-        @assert BC == :ZC
+        iseven(Ly) || throw(ArgumentError("Ly must be even for HoneycombLattice"))
+        BC == :ZC || throw(ArgumentError("HoneycombLattice only supports BC = :ZC"))
         new(Lx, Ly, BC)
     end
 end
