@@ -1,4 +1,8 @@
 @testset "run_DMRG regression" begin
+    @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; correlation = :bad)
+    @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; alg = :bad)
+    @test_throws ArgumentError SUNDMRG._init_runtime_and_engine(CPUEngine, :square, 3, 4, 2, 0, 1)
+
     init_DMRG!()
     try
         rank, dmrg = run_DMRG(SU(2)HeisenbergModel(), SquareLattice(4, 4), 100, [100, 200, 400, 800], 1600, CPUEngine; verbose = false, manage_mpi = false)

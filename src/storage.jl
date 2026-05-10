@@ -11,20 +11,22 @@ struct JLD2InternalStorage <: AbstractInternalStorage
     dirid
 end
 
+_storage_dir(storage::JLD2InternalStorage) = joinpath(storage.scratch, "temp$(storage.dirid)")
+
 function init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
     if fileio
         dirid = rank == 0 ? lpad(rand(0 : 99999), 5, "0") : 0
         if rank == 0
-            mkdir("$scratch/temp$dirid")
+            mkdir(joinpath(scratch, "temp$dirid"))
         end
         return JLD2InternalStorage(scratch, dirid)
     end
     return MemoryInternalStorage(block_table, trmat_table, tensor_table)
 end
 
-_block_filename(storage::JLD2InternalStorage, label, len) = "$(storage.scratch)/temp$(storage.dirid)/block_$(label)_$(len).jld2"
-_trmat_filename(storage::JLD2InternalStorage, label, len) = "$(storage.scratch)/temp$(storage.dirid)/trmat_$(label)_$(len).jld2"
-_tensor_filename(storage::JLD2InternalStorage, label, len, y) = "$(storage.scratch)/temp$(storage.dirid)/tensor_$(label)_$(len)_$(y).jld2"
+_block_filename(storage::JLD2InternalStorage, label, len) = joinpath(_storage_dir(storage), "block_$(label)_$(len).jld2")
+_trmat_filename(storage::JLD2InternalStorage, label, len) = joinpath(_storage_dir(storage), "trmat_$(label)_$(len).jld2")
+_tensor_filename(storage::JLD2InternalStorage, label, len, y) = joinpath(_storage_dir(storage), "tensor_$(label)_$(len)_$(y).jld2")
 
 function load_block(storage::MemoryInternalStorage, label, len)
     storage.block_table[label, len]
@@ -98,7 +100,7 @@ function save_tensor(storage::JLD2InternalStorage, label, len, y, tensor)
 end
 
 function cleanup_storage!(storage::JLD2InternalStorage)
-    rm("$(storage.scratch)/temp$(storage.dirid)"; recursive = true)
+    rm(_storage_dir(storage); recursive = true)
 end
 
 cleanup_storage!(::MemoryInternalStorage) = nothing

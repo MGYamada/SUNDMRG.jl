@@ -49,3 +49,24 @@ function engine_matrix_type(engine)
         Matrix{Float64}
     end
 end
+
+empty_engine_matrix_vector(engine) = engine_matrix_type(engine)[]
+
+function empty_engine_tensor_dict(engine)
+    Dict{Int, Matrix{Vector{engine_matrix_type(engine)}}}()
+end
+
+function empty_engine_tensor_matrix(engine)
+    Matrix{Vector{engine_matrix_type(engine)}}(undef, 0, 0)
+end
+
+function empty_engine_tensor_matrices(engine, n)
+    [empty_engine_tensor_matrix(engine) for _ in 1 : n]
+end
+
+function synchronize_engine(engine)
+    if engine <: GPUEngine
+        CUDA.synchronize()
+    end
+    return nothing
+end

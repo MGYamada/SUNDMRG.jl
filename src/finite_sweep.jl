@@ -17,13 +17,13 @@ function _load_sweep_env(storage, env_label, env_len, config::_FiniteRunConfig, 
     (; lattice, Ly, widthmax, tables) = config
     (; engine, comm, rank, Ncpu, on_the_fly, γ_type, signfactor) = runtime
 
-    if rank == 0
+    if isroot(runtime)
         env_block, env_trmat = load_block_and_trmat(storage, env_label, env_len, engine, Val(Nc))
         env_tensor_dict = spin_operators!(storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
     else
         env_block = Block(env_len, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
-        env_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
-        env_trmat = Matrix{Float64}[]
+        env_tensor_dict = empty_engine_tensor_dict(engine)
+        env_trmat = empty_engine_matrix_vector(engine)
     end
 
     env_block_enl = enlarge_block(env_block, env_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
@@ -77,8 +77,8 @@ function _sweep_step!(SiSj, state::_SweepState, EE, storage, L, m, measurement, 
     state.env_block, state.env_tensor_dict, state.env_trmat, state.env_block_enl = _load_sweep_env(storage, state.env_label, L - state.sys_block.length - 2, config, runtime, Val(Nc))
     Ψ0_guess = _reverse_sweep_end!(state, Ψ0_guess, config, runtime)
 
-    if verbose && rank == 0
-        println(graphic(state.sys_block, state.env_block; sys_label = state.sys_label))
+    if verbose
+        root_println(runtime, graphic(state.sys_block, state.env_block; sys_label = state.sys_label))
     end
 
     cor = measurement && (state.sys_label == :r || state.sys_block.length == 0) ? correlation : :none
@@ -90,14 +90,14 @@ function _sweep_step!(SiSj, state::_SweepState, EE, storage, L, m, measurement, 
     state.sys_trmat = result.trmat
     state.Sj = result.Sj
 
-    if rank == 0
+    if isroot(runtime)
         if state.sys_label == :r && state.env_block_enl.length % Ly == 0
             EE[state.env_block_enl.length ÷ Ly] = result.ee
         end
         if verbose
-            println("E / N = ", result.energy / L)
-            println("E     = ", result.energy)
-            println("S_EE  = ", result.ee)
+            root_println(runtime, "E / N = ", result.energy / L)
+            root_println(runtime, "E     = ", result.energy)
+            root_println(runtime, "S_EE  = ", result.ee)
         end
         save_block_and_trmat!(storage, state.sys_label, state.sys_block, state.sys_trmat)
     end
@@ -121,7 +121,7 @@ function _update_measurement_flag(measurement, energies, EEs, config::_FiniteRun
         return measurement
     end
 
-    if rank == 0
+    if isroot(runtime)
         measurement = abs((energies[end] - energies[end - 1]) / energies[end]) < tol_energy && abs((EEs[end] - EEs[end - 1]) / EEs[end]) < tol_EE
         MPI.bcast(measurement, 0, comm)
         return measurement

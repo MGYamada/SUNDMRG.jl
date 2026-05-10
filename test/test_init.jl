@@ -11,8 +11,8 @@
     @test hc.Ly == 2
     @test hc.BC == :ZC
 
-    @test_throws AssertionError SUNDMRG.HoneycombLattice(4, 3, :ZC)
-    @test_throws AssertionError SUNDMRG.HoneycombLattice(4, 2, :PBC)
+    @test_throws ArgumentError SUNDMRG.HoneycombLattice(4, 3, :ZC)
+    @test_throws ArgumentError SUNDMRG.HoneycombLattice(4, 2, :PBC)
 
     left = (length = 2,)
     right = (length = 3,)

@@ -30,6 +30,18 @@ rank, dmrg = run_DMRG(SU(2)HeisenbergModel(), SquareLattice(4, 4), 100, [100, 20
 ```
 `dmrg` is returned only when `rank == 0` when you are using the MPI parallelization.
 
+By default, `run_DMRG` initializes and finalizes MPI for a single run. If you want to
+run multiple simulations in the same Julia session, manage MPI outside the calls:
+```julia
+init_DMRG!()
+try
+    run_DMRG(SU(2)HeisenbergModel(), SquareLattice(4, 4), 100, [100], 100, CPUEngine; manage_mpi = false)
+    run_DMRG(SU(2)HeisenbergModel(), SquareLattice(4, 4), 100, [100], 100, CPUEngine; manage_mpi = false)
+finally
+    finalize_DMRG!()
+end
+```
+
 For a more detailed configuration, please look at the examples directory.
 
 Please be careful that the expectation value of the bond operator is returned
