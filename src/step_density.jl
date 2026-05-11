@@ -189,9 +189,9 @@ function _apply_density_matrix_correction!(ρs, switch, side::_StepSideContext, 
     for x in unique(map(z -> z[switch], superblock_bonds))
         if x == conn
             if switch == 1
-                Stemp = isnothing(sys_connS) ? sys_enl.tensor_dict[x_conn] : sys_connS
+                Stemp = _connection_or_tensor(sys_connS, sys_enl, x_conn)
             else
-                Stemp = isnothing(env_connS) ? env_enl.tensor_dict[y_conn] : env_connS
+                Stemp = _connection_or_tensor(env_connS, env_enl, y_conn)
             end
         else
             if switch == 1
@@ -206,11 +206,7 @@ function _apply_density_matrix_correction!(ρs, switch, side::_StepSideContext, 
         for k in 1 : len, l in 1 : len
             if haskey(dp[k], βs[l])
                 for τ1 in 1 : length(Stemp[l, k])
-                    if engine <: GPUEngine && Stemp[l, k][τ1] isa CuMatrix{Float64}
-                        Sρs[l] .+= UpperTriangular(Stemp[l, k][τ1] * CUBLAS.symm('R', 'U', ρs[k], Stemp[l, k][τ1])')
-                    else
-                        Sρs[l] .+= UpperTriangular(Stemp[l, k][τ1] * (Stemp[l, k][τ1] * Symmetric(ρs[k]))')
-                    end
+                    _add_density_correction!(Sρs[l], Stemp[l, k][τ1], ρs[k], engine)
                 end
             end
         end
@@ -221,4 +217,12 @@ function _apply_density_matrix_correction!(ρs, switch, side::_StepSideContext, 
     end
 
     return ρs
+end
+
+function _add_density_correction!(dest, spin, ρ, ::Type{<:CPUEngine})
+    dest .+= UpperTriangular(spin * (spin * Symmetric(ρ))')
+end
+
+function _add_density_correction!(dest, spin, ρ, ::Type{<:GPUEngine})
+    dest .+= UpperTriangular(spin * CUBLAS.symm('R', 'U', ρ, spin)')
 end

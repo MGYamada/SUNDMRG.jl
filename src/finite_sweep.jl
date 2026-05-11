@@ -81,7 +81,7 @@ function _sweep_step!(SiSj, state::_SweepState, EE, storage, L, m, measurement, 
         root_println(runtime, graphic(state.sys_block, state.env_block; sys_label = state.sys_label))
     end
 
-    cor = measurement && (state.sys_label == :r || state.sys_block.length == 0) ? correlation : :none
+    cor = measurement && (state.sys_label == :r || state.sys_block.length == 0) ? correlation : Val(:none)
     result = dmrg_step_result!(SiSj, state.sys_label, state.sys_block, state.env_block, state.sys_tensor_dict, state.env_tensor_dict, state.sys_block_enl, state.env_block_enl, Ly, m..., widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, Val(false); Ψ0_guess = Ψ0_guess, ES_max = ES_max, correlation = cor, margin = margin, lattice = lattice, Sj = state.Sj, alg = alg, noisy = verbose)
     state.sys_block = result.block
     state.sys_tensor_dict = result.tensor_dict

@@ -4,7 +4,7 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
 
     did_init = false
     runtime_initialized = false
-    storage = nothing
+    runtime_finalized = Ref(false)
     rank = 0
     if manage_mpi
         did_init = init_DMRG!()
@@ -16,12 +16,24 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
         comm, rank, Ncpu = _comm_context()
         on_the_fly, mirror, γ_type, γ_list, N, signfactor = _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc, rank, Ncpu)
         runtime_initialized = true
-        config = _FiniteRunConfig(lattice, Lx, Ly, N, Nc, m_warmup, m_sweep_list, m_cooldown, target, widthmax, tables, fileio, scratch, ES_max, tol_energy, tol_EE, correlation, margin, alg, verbose)
+        config = _FiniteRunConfig(Val(lattice), Lx, Ly, N, Nc, m_warmup, m_sweep_list, m_cooldown, target, widthmax, tables, Val(fileio), scratch, ES_max, tol_energy, tol_EE, Val(correlation), margin, Val(alg), verbose)
         runtime = _FiniteRuntime(engine, comm, rank, Ncpu, on_the_fly, mirror, γ_type, γ_list, signfactor)
 
-        state = _init_state(config, runtime)
-        storage = state.storage
+        return _run_DMRG_impl(config, runtime, runtime_finalized, Val(Nc))
+    finally
+        if runtime_initialized && !runtime_finalized[]
+            _finalize_runtime!(engine, nothing, rank)
+        end
+        if manage_mpi && did_init
+            finalize_DMRG!()
+        end
+    end
+end
 
+function _run_DMRG_impl(config::_FiniteRunConfig, runtime::_FiniteRuntime, runtime_finalized, ::Val{Nc}) where Nc
+    state = _init_state(config, runtime)
+
+    try
         _warmup_phase!(state, config, runtime)
 
         growth = _growth_phase!(state, config, runtime)
@@ -37,13 +49,9 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
             map!(x -> 0.5x, values(state.SiSj))
         end
 
-        return rank, rank == 0 ? DMRGOutput(state.m_list, state.errors, state.energies, state.EEs, state.EE, ESrtn, state.SiSj) : nothing
+        return runtime.rank, runtime.rank == 0 ? DMRGOutput(state.m_list, state.errors, state.energies, state.EEs, state.EE, ESrtn, state.SiSj) : nothing
     finally
-        if runtime_initialized
-            _finalize_runtime!(engine, storage, rank)
-        end
-        if manage_mpi && did_init
-            finalize_DMRG!()
-        end
+        _finalize_runtime!(runtime.engine, state.storage, runtime.rank)
+        runtime_finalized[] = true
     end
 end

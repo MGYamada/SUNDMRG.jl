@@ -1,4 +1,4 @@
-function _record_step_result!(m_list, errors, energies, EEs, m, result::DMRGStepResult)
+function _record_step_result!(m_list, errors, energies, EEs, m, result::AbstractDMRGStepResult)
     push!(m_list, m)
     push!(errors, result.trerr)
     push!(energies, result.energy)
@@ -6,7 +6,7 @@ function _record_step_result!(m_list, errors, energies, EEs, m, result::DMRGStep
     return result.es
 end
 
-function _apply_left_step_result!(state::_FiniteState, result::DMRGStepResult)
+function _apply_left_step_result!(state::_FiniteState, result::AbstractDMRGStepResult)
     state.blockL = result.block
     state.blockL_tensor_dict = result.tensor_dict
     state.blockL_enl = result.block_enl
@@ -15,7 +15,7 @@ function _apply_left_step_result!(state::_FiniteState, result::DMRGStepResult)
     return result.es
 end
 
-function _apply_mirror_env_result!(state::_FiniteState, result::DMRGStepResult, config::_FiniteRunConfig, runtime::_FiniteRuntime)
+function _apply_mirror_env_result!(state::_FiniteState, result::DMRGStepResultWithEnv, config::_FiniteRunConfig, runtime::_FiniteRuntime)
     (; widthmax, tables) = config
     (; comm, rank, Ncpu, on_the_fly, γ_list, engine) = runtime
 
@@ -67,57 +67,11 @@ function _init_state(config::_FiniteRunConfig, runtime::_FiniteRuntime)
     trmat_table = Dict{Tuple{Symbol, Int}, Vector{Matrix{Float64}}}()
 
     if isroot(runtime)
-        if verbose
-            root_println(runtime, repeat("-", 60))
-            root_println(runtime, "SU($Nc) DMRG simulation on the $Lx x $Ly $lattice lattice cylinder:")
-            if on_the_fly
-                root_println(runtime, "All representations are used in the calculation.")
-            else
-                irreps = irreplist(Nc, widthmax)
-                root_println(runtime, length(irreps), " irreps from ", weight(first(irreps)), " to ", weight(last(irreps)), " are used in the calculation.")
-            end
-            root_println(runtime, target == 0 ? "The ground state" : "The excited state #$target", " will be calculated.")
-            root_println(runtime, repeat("-", 60))
-        end
-
-        storage = init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
-
-        blockL = Block(0, Tuple{Int, Int}[], [trivialirrep(Val(Nc))], [1], [1], Dict{Symbol, Vector{Matrix{Float64}}}(:H => [zeros(1, 1)]))
-        blockL_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
-        trmatL = [to_engine_array(engine, diagm([1.0]))]
-
-        if !mirror
-            blockR = Block(0, Tuple{Int, Int}[], [trivialirrep(Val(Nc))], [1], [1], Dict{Symbol, Vector{Matrix{Float64}}}(:H => [zeros(1, 1)]))
-            blockR_tensor_dict = Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
-            trmatR = [to_engine_array(engine, diagm([1.0]))]
-        else
-            blockR = blockL
-            blockR_tensor_dict = blockL_tensor_dict
-            trmatR = trmatL
-        end
-
-        _save_edge_blocks!(storage, mirror, blockL, trmatL, blockR, trmatR, runtime)
-
-        if verbose
-            root_println(runtime, "#")
-            root_println(runtime, "# Warming up with (m, α) = ", m_warmup)
-            root_println(runtime, "#")
-        end
+        storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR =
+            _init_root_state_edges(config, runtime, block_table, trmat_table, tensor_table, Val(Nc))
     else
-        storage = init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
-        blockL = Block(0, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
-        blockL_tensor_dict = empty_engine_tensor_dict(engine)
-        trmatL = empty_engine_matrix_vector(engine)
-
-        if !mirror
-            blockR = Block(0, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
-            blockR_tensor_dict = empty_engine_tensor_dict(engine)
-            trmatR = empty_engine_matrix_vector(engine)
-        else
-            blockR = blockL
-            blockR_tensor_dict = blockL_tensor_dict
-            trmatR = empty_engine_matrix_vector(engine)
-        end
+        storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR =
+            _init_worker_state_edges(config, runtime, block_table, trmat_table, tensor_table, Val(Nc))
     end
 
     blockL_enl = enlarge_block(blockL, blockL_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
@@ -148,6 +102,70 @@ function _init_state(config::_FiniteRunConfig, runtime::_FiniteRuntime)
         trmatR,
         Ψ,
     )
+end
+
+function _init_root_state_edges(config::_FiniteRunConfig, runtime::_FiniteRuntime, block_table, trmat_table, tensor_table, ::Val{Nc}) where Nc
+    (; lattice, Lx, Ly, target, m_warmup, widthmax, fileio, scratch, verbose) = config
+    (; engine, on_the_fly, mirror, rank) = runtime
+
+    if verbose
+        root_println(runtime, repeat("-", 60))
+        root_println(runtime, "SU($Nc) DMRG simulation on the $Lx x $Ly $(_lattice_name(lattice)) lattice cylinder:")
+        if _on_the_fly(on_the_fly)
+            root_println(runtime, "All representations are used in the calculation.")
+        else
+            irreps = irreplist(Nc, widthmax)
+            root_println(runtime, length(irreps), " irreps from ", weight(first(irreps)), " to ", weight(last(irreps)), " are used in the calculation.")
+        end
+        root_println(runtime, target == 0 ? "The ground state" : "The excited state #$target", " will be calculated.")
+        root_println(runtime, repeat("-", 60))
+    end
+
+    storage = init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
+    blockL = Block(0, Tuple{Int, Int}[], [trivialirrep(Val(Nc))], [1], [1], ScalarDictCPU(:H => [zeros(1, 1)]))
+    blockL_tensor_dict = TensorDictCPU()
+    trmatL = [to_engine_array(engine, diagm([1.0]))]
+
+    if !mirror
+        blockR = Block(0, Tuple{Int, Int}[], [trivialirrep(Val(Nc))], [1], [1], ScalarDictCPU(:H => [zeros(1, 1)]))
+        blockR_tensor_dict = TensorDictCPU()
+        trmatR = [to_engine_array(engine, diagm([1.0]))]
+    else
+        blockR = blockL
+        blockR_tensor_dict = blockL_tensor_dict
+        trmatR = trmatL
+    end
+
+    _save_edge_blocks!(storage, mirror, blockL, trmatL, blockR, trmatR, runtime)
+
+    if verbose
+        root_println(runtime, "#")
+        root_println(runtime, "# Warming up with (m, α) = ", m_warmup)
+        root_println(runtime, "#")
+    end
+
+    return storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR
+end
+
+function _init_worker_state_edges(config::_FiniteRunConfig, runtime::_FiniteRuntime, block_table, trmat_table, tensor_table, ::Val{Nc}) where Nc
+    (; fileio, scratch) = config
+    (; engine, mirror, γ_type, rank) = runtime
+    storage = init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
+    blockL = Block(0, Tuple{Int, Int}[], γ_type[], Int[], Int[], ScalarDictCPU())
+    blockL_tensor_dict = empty_engine_tensor_dict(engine)
+    trmatL = empty_engine_matrix_vector(engine)
+
+    if !mirror
+        blockR = Block(0, Tuple{Int, Int}[], γ_type[], Int[], Int[], ScalarDictCPU())
+        blockR_tensor_dict = empty_engine_tensor_dict(engine)
+        trmatR = empty_engine_matrix_vector(engine)
+    else
+        blockR = blockL
+        blockR_tensor_dict = blockL_tensor_dict
+        trmatR = empty_engine_matrix_vector(engine)
+    end
+
+    return storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR
 end
 
 function _warmup_phase!(state::_FiniteState, config::_FiniteRunConfig, runtime::_FiniteRuntime)

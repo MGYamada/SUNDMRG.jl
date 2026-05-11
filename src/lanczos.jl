@@ -104,6 +104,13 @@ Lanczos!(A!, initial, position, comm, rank, engine; maxiter = 100, alg = :slow)
 returns eigenpairs of a linear map A!
 """
 function Lanczos!(A!::Function, initial, position, comm, rank, engine; maxiter = 100, alg = :slow)
+    Lanczos!(A!, initial, position, comm, rank, engine, _alg_value(alg); maxiter = maxiter)
+end
+
+_alg_value(alg::Symbol) = Val(alg)
+_alg_value(alg::Val) = alg
+
+function Lanczos!(A!::Function, initial, position, comm, rank, engine, mode::Val; maxiter = 100)
     ketkm1 = deepcopy(initial)
     for I in eachindex(ketkm1)
         for J in eachindex(ketkm1[I])
@@ -119,10 +126,7 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine; maxiter =
     vals = Float64[]
     vecs = zeros(0, 0)
     vold = Inf
-    if alg == :fast
-        m, n = size(ketk)
-        ketk_list = Matrix{Vector{Matrix{Float64}}}[]
-    end
+    cache = _init_lanczos_cache(mode, ketk)
     k = 1
     while true
         A!(ketk1, ketk)
@@ -152,9 +156,7 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine; maxiter =
         mycopyto!(ketkm1, ketk)
         mycopyto!(ketk, ketk1)
         push!(βlist, β)
-        if alg == :fast
-            push!(ketk_list, map(x -> Array.(x), ketk))
-        end
+        _cache_lanczos_vector!(mode, cache, ketk)
         k += 1
     end
     vecs = MPI.bcast(vecs, 0, comm)::Matrix{Float64}
@@ -169,23 +171,7 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine; maxiter =
     position = min(position, size(vecs, 2))
     myrmul!(initial, vecs[1, position])
     for k in 1 : size(vecs, 1) - 1
-        if alg == :slow
-            A!(ketk1, ketk)
-            α = αlist[k]
-            myaxpy!(-β, ketkm1, ketk1)
-            myaxpy!(-α, ketk, ketk1)
-            β = βlist[k]
-            myrdiv!(ketk1, β)
-            mycopyto!(ketkm1, ketk)
-            mycopyto!(ketk, ketk1)
-            myaxpy!(vecs[k + 1, position], ketk, initial)
-        else
-            if engine <: GPUEngine
-                myaxpy!(vecs[k + 1, position], [CuArray.(ketk_list[k][i, j]) for i in 1 : m, j in 1 : n], initial)
-            else
-                myaxpy!(vecs[k + 1, position], ketk_list[k], initial)
-            end
-        end
+        β = _lanczos_reconstruct_step!(mode, A!, engine, vecs[k + 1, position], cache, initial, ketk, ketk1, ketkm1, αlist, βlist, k, β)
     end
     myrdiv!(initial, sqrt(MPI.Allreduce(mydot(initial, initial), MPI.SUM, comm)))
     A!(ketk, initial)
@@ -198,4 +184,44 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine; maxiter =
         rtnval = CG!(A!, val, initial, ketk, ketkm1, ketk1, comm, rank)
     end
     rtnval
+end
+
+_init_lanczos_cache(::Val{:slow}, ketk) = nothing
+
+function _init_lanczos_cache(::Val{:fast}, ketk)
+    m, n = size(ketk)
+    return (m = m, n = n, vectors = Matrix{Vector{Matrix{Float64}}}[])
+end
+
+_cache_lanczos_vector!(::Val{:slow}, cache, ketk) = nothing
+
+function _cache_lanczos_vector!(::Val{:fast}, cache, ketk)
+    push!(cache.vectors, map(x -> Array.(x), ketk))
+    return nothing
+end
+
+function _lanczos_reconstruct_step!(::Val{:slow}, A!, engine, coeff, cache, initial, ketk, ketk1, ketkm1, αlist, βlist, k, β)
+    A!(ketk1, ketk)
+    α = αlist[k]
+    myaxpy!(-β, ketkm1, ketk1)
+    myaxpy!(-α, ketk, ketk1)
+    β = βlist[k]
+    myrdiv!(ketk1, β)
+    mycopyto!(ketkm1, ketk)
+    mycopyto!(ketk, ketk1)
+    myaxpy!(coeff, ketk, initial)
+    return β
+end
+
+function _lanczos_reconstruct_step!(::Val{:fast}, A!, engine, coeff, cache, initial, ketk, ketk1, ketkm1, αlist, βlist, k, β)
+    _fast_lanczos_axpy!(engine, coeff, cache.vectors[k], initial, cache.m, cache.n)
+    return β
+end
+
+function _fast_lanczos_axpy!(::Type{<:CPUEngine}, coeff, ketk, initial, m, n)
+    myaxpy!(coeff, ketk, initial)
+end
+
+function _fast_lanczos_axpy!(::Type{<:GPUEngine}, coeff, ketk, initial, m, n)
+    myaxpy!(coeff, [CuArray.(ketk[i, j]) for i in 1 : m, j in 1 : n], initial)
 end

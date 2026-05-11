@@ -63,7 +63,7 @@ function eig_prediction(Ψ0, sys_label, sys_enl::EnlargedBlock{Nc}, env_enl::Enl
                     βl = sys_βs[l]
                     if (i + l - 2) % Ncpu == rank && sys_mαβ[j, l] > 0
                         temp3 = env_trmat[i] * temp2[cum_env_mαβ[i, k] + 1 : cum_env_mαβ[i + 1, k], :]
-                        cmatrix = on_the_fly ? on_the_fly_calc5(Nc, (αj, βl, αi, γirrep, βk)) : tables[5][αj, βl, αi, γirrep, βk]
+                        cmatrix = _on_the_fly(on_the_fly) ? on_the_fly_calc5(Nc, (αj, βl, αi, γirrep, βk)) : tables[5][αj, βl, αi, γirrep, βk]
                         for om1 in 1 : OM[l, i]
                             @. Ψ0_guess[i, l][om1][:, cum_sys_mαβ[j, l] + 1 : cum_sys_mαβ[j + 1, l]] += cmatrix[om2, om1] * temp3
                         end
@@ -103,7 +103,7 @@ function _wavefunction_reverse(Ψ0, sys_label, sys, env, widthmax, comm, rank, N
     for j in 1 : size(Ψ0, 2), i in 1 : size(Ψ0, 1)
         OM = length(Ψ0[i, j])
         if OM > 0
-            rmatrix = (on_the_fly ? on_the_fly_calc6((sys_βs[j], env_βs[i], γirrep)) : tables[6][sys_βs[j], env_βs[i], γirrep])
+            rmatrix = (_on_the_fly(on_the_fly) ? on_the_fly_calc6((sys_βs[j], env_βs[i], γirrep)) : tables[6][sys_βs[j], env_βs[i], γirrep])
             for τ in 1 : OM, τ′ in 1 : OM
                 @. Ψ0_new[j, i][τ′] += rmatrix[τ′, τ] * Ψ0[i, j][τ]'
             end

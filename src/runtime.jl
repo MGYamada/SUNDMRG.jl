@@ -3,12 +3,20 @@ struct _FiniteRuntime
     comm
     rank::Int
     Ncpu::Int
-    on_the_fly::Bool
+    on_the_fly
     mirror::Bool
     γ_type
     γ_list
     signfactor::Float64
 end
+
+_mode_value(x::Val{X}) where X = X
+_mode_value(x) = x
+_lattice_name(lattice) = _mode_value(lattice)
+_correlation_name(correlation) = _mode_value(correlation)
+_on_the_fly(on_the_fly) = _mode_value(on_the_fly)
+_is_honeycomb_zc(lattice) = _lattice_name(lattice) == :honeycombZC
+_is_square_lattice(lattice) = _lattice_name(lattice) == :square
 
 function init_DMRG!()
     if MPI.Finalized()
@@ -72,22 +80,32 @@ function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc, rank, Ncpu)
         push!(γ_list, SUNIrrep{Nc}(ntuple(i -> 0 + (i <= h), Val(Nc))))
     end
 
-    if engine <: GPUEngine
-        Ngpu = Int(length(devices()))
-        Ncpu <= Ngpu || throw(ArgumentError("Ncpu must be less than or equal to the number of GPUs"))
-        device!(rank)
-        magma_init()
-    end
+    _init_engine_runtime!(engine, rank, Ncpu)
 
     N = Lx * Ly
     signfactor = iseven(Nc) ? -1.0 : 1.0
-    return on_the_fly, mirror, γ_type, γ_list, N, signfactor
+    return Val(on_the_fly), mirror, γ_type, γ_list, N, signfactor
+end
+
+_init_engine_runtime!(::Type{<:CPUEngine}, rank, Ncpu) = nothing
+
+function _init_engine_runtime!(::Type{<:GPUEngine}, rank, Ncpu)
+    Ngpu = Int(length(devices()))
+    Ncpu <= Ngpu || throw(ArgumentError("Ncpu must be less than or equal to the number of GPUs"))
+    device!(rank)
+    magma_init()
+    return nothing
+end
+
+_finalize_engine_runtime!(::Type{<:CPUEngine}) = nothing
+
+function _finalize_engine_runtime!(::Type{<:GPUEngine})
+    magma_finalize()
+    return nothing
 end
 
 function _finalize_runtime!(engine, ::Nothing, rank)
-    if engine <: GPUEngine
-        magma_finalize()
-    end
+    _finalize_engine_runtime!(engine)
 end
 
 function _finalize_runtime!(engine, storage, rank)
@@ -95,7 +113,5 @@ function _finalize_runtime!(engine, storage, rank)
         cleanup_storage!(storage)
     end
 
-    if engine <: GPUEngine
-        magma_finalize()
-    end
+    _finalize_engine_runtime!(engine)
 end

@@ -53,12 +53,12 @@ struct _StepSideContext{MS,B,D,BT,BET}
     block_enl::BET
 end
 
-struct _StepLanczosContext{CommT,E,H1,BondsT,SysConnT,EnvConnT,MST,BetaT,DPT,EnlargeT,SysTensorT,EnvTensorT,H2T,OMT}
+struct _StepLanczosContext{CommT,E,A,H1,BondsT,SysConnT,EnvConnT,MST,BetaT,DPT,EnlargeT,SysTensorT,EnvTensorT,H2T,OMT}
     target::Int
     comm::CommT
     rank::Int
     engine::Type{E}
-    alg::Symbol
+    alg::A
     superblock_H1::H1
     bonds_hold::BondsT
     x_conn::Int
@@ -93,7 +93,7 @@ struct _StepDensityContext{CommT,E}
     noisy::Bool
 end
 
-struct _StepMeasurementContext{SiSjT,SysConnT,EnvConnT,SysTensorT,EnvTensorT,SysTensorHoldT,EnvTensorHoldT,BetaT,DPT,MST,EnlargeT,H2T,OMT,CommT,E}
+struct _StepMeasurementContext{SiSjT,SysConnT,EnvConnT,SysTensorT,EnvTensorT,SysTensorHoldT,EnvTensorHoldT,BetaT,DPT,MST,EnlargeT,H2T,OMT,CommT,E,C,L}
     SiSj::SiSjT
     Ly::Int
     x_conn::Int
@@ -122,12 +122,12 @@ struct _StepMeasurementContext{SiSjT,SysConnT,EnvConnT,SysTensorT,EnvTensorT,Sys
     rank::Int
     Ncpu::Int
     engine::Type{E}
-    correlation::Symbol
+    correlation::C
     margin::Int
-    lattice::Symbol
+    lattice::L
 end
 
-struct _StepBlockContext{CommT,TablesT,E}
+struct _StepBlockContext{CommT,TablesT,O,E,L}
     Ly::Int
     widthmax::Int
     signfactor::Float64
@@ -135,9 +135,9 @@ struct _StepBlockContext{CommT,TablesT,E}
     rank::Int
     Ncpu::Int
     tables::TablesT
-    on_the_fly::Bool
+    on_the_fly::O
     engine::Type{E}
-    lattice::Symbol
+    lattice::L
 end
 
 struct _StepCorrectionContext{BondsT,SysConnT,EnvConnT,SysEnlT,EnvEnlT,SysTensorHoldT,EnvTensorHoldT,SysTensorT,EnvTensorT,MST,DPT,BetaT,EnlargeT,E}

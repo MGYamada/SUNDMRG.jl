@@ -79,7 +79,8 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
     end
 
     _report_overlap(Ψ0_guess, Ψ0, comm, rank, noisy)
-    return DMRGStepResult(
+    return _dmrg_step_result(
+        Val(env_calc),
         newblock[1],
         newtensor_dict[1],
         newblock_enl[1],
@@ -89,15 +90,17 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
         trmat[1],
         ee[1],
         es[1],
-        env_calc ? nothing : Sj,
-        env_calc ? newblock[2] : nothing,
-        env_calc ? newtensor_dict[2] : nothing,
-        env_calc ? newblock_enl[2] : nothing,
-        env_calc ? trmat[2] : nothing,
+        Sj,
+        newblock,
+        newtensor_dict,
+        newblock_enl,
+        trmat,
     )
 end
 
-struct DMRGStepResult{B,T,BEnl,ΨT,TrT,EST,SJT,EB,ET,EBEnl,ETrT}
+abstract type AbstractDMRGStepResult end
+
+struct DMRGStepResult{B,T,BEnl,ΨT,TrT,EST,SJT} <: AbstractDMRGStepResult
     block::B
     tensor_dict::T
     block_enl::BEnl
@@ -108,10 +111,30 @@ struct DMRGStepResult{B,T,BEnl,ΨT,TrT,EST,SJT,EB,ET,EBEnl,ETrT}
     ee::Float64
     es::EST
     Sj::SJT
+end
+
+struct DMRGStepResultWithEnv{B,T,BEnl,ΨT,TrT,EST,EB,ET,EBEnl,ETrT} <: AbstractDMRGStepResult
+    block::B
+    tensor_dict::T
+    block_enl::BEnl
+    trerr::Float64
+    energy::Float64
+    Ψ::ΨT
+    trmat::TrT
+    ee::Float64
+    es::EST
     env_block::EB
     env_tensor_dict::ET
     env_block_enl::EBEnl
     env_trmat::ETrT
+end
+
+function _dmrg_step_result(::Val{false}, block, tensor_dict, block_enl, trerr, energy, Ψ, trmat, ee, es, Sj, newblock, newtensor_dict, newblock_enl, trmats)
+    DMRGStepResult(block, tensor_dict, block_enl, trerr, energy, Ψ, trmat, ee, es, Sj)
+end
+
+function _dmrg_step_result(::Val{true}, block, tensor_dict, block_enl, trerr, energy, Ψ, trmat, ee, es, Sj, newblock, newtensor_dict, newblock_enl, trmats)
+    DMRGStepResultWithEnv(block, tensor_dict, block_enl, trerr, energy, Ψ, trmat, ee, es, newblock[2], newtensor_dict[2], newblock_enl[2], trmats[2])
 end
 
 function dmrg_step_result!(args...; kwargs...)
