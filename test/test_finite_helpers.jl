@@ -67,8 +67,8 @@
     end
 end
 
-@testset "DMRG step result adapter" begin
-    step = SUNDMRG._dmrg_step_result(ntuple(identity, 10))
+@testset "DMRG step result" begin
+    step = SUNDMRG.DMRGStepResult(1, 2, 3, 4.0, 5.0, 6, 7, 8.0, 9, 10, nothing, nothing, nothing, nothing)
     @test step.block == 1
     @test step.es == 9
     @test step.Sj == 10
@@ -77,7 +77,7 @@ end
     @test step.env_block_enl === nothing
     @test step.env_trmat === nothing
 
-    env_step = SUNDMRG._dmrg_step_result(ntuple(identity, 13))
+    env_step = SUNDMRG.DMRGStepResult(1, 2, 3, 4.0, 5.0, 6, 7, 8.0, 9, nothing, 10, 11, 12, 13)
     @test env_step.block == 1
     @test env_step.es == 9
     @test env_step.Sj === nothing
@@ -85,6 +85,4 @@ end
     @test env_step.env_tensor_dict == 11
     @test env_step.env_block_enl == 12
     @test env_step.env_trmat == 13
-
-    @test_throws ArgumentError SUNDMRG._dmrg_step_result((1, 2, 3))
 end

@@ -1,7 +1,7 @@
 struct Block{Nc}
     length::Int
     bonds::Vector{Tuple{Int, Int}}
-    β_list::Vector{<:SUNIrrep{Nc}}
+    β_list::Vector{SUNIrrep{Nc}}
     mβ_list_old::Vector{Int}
     mβ_list::Vector{Int}
     scalar_dict::Dict{Symbol, Vector{Matrix{Float64}}}
@@ -12,9 +12,9 @@ abstract type EnlargedBlock{Nc} end
 struct EnlargedBlockCPU{Nc} <: EnlargedBlock{Nc}
     length::Int
     bonds::Vector{Tuple{Int, Int}}
-    α_list::Vector{<:SUNIrrep{Nc}}
+    α_list::Vector{SUNIrrep{Nc}}
     mα_list::Vector{Int}
-    β_list::Vector{<:SUNIrrep{Nc}}
+    β_list::Vector{SUNIrrep{Nc}}
     mβ_list::Vector{Int}
     mαβ::Matrix{Int}
     scalar_dict::Dict{Symbol, Vector{Matrix{Float64}}}
@@ -24,13 +24,46 @@ end
 struct EnlargedBlockGPU{Nc} <: EnlargedBlock{Nc}
     length::Int
     bonds::Vector{Tuple{Int, Int}}
-    α_list::Vector{<:SUNIrrep{Nc}}
+    α_list::Vector{SUNIrrep{Nc}}
     mα_list::Vector{Int}
-    β_list::Vector{<:SUNIrrep{Nc}}
+    β_list::Vector{SUNIrrep{Nc}}
     mβ_list::Vector{Int}
     mαβ::Matrix{Int}
     scalar_dict::Dict{Symbol, Vector{CuMatrix{Float64}}}
     tensor_dict::Dict{Int, Matrix{Vector{CuMatrix{Float64}}}}
+end
+
+function _build_spin_tensor(Nc, αs, βs, mαβ, αβmatrix, cum_mαβ, tables, on_the_fly)
+    fac = sqrt((Nc ^ 2 - 1) / Nc)
+    lenα = length(αs)
+    lenβ = length(βs)
+    ms = cum_mαβ[end, :]
+    adjoint = adjointirrep(Val(Nc))
+    dp = [directproduct(βs[j], adjoint) for j in 1 : lenβ]
+
+    map([(i, j) for i in 1 : lenβ, j in 1 : lenβ]) do (i, j)
+        o1 = get(dp[j], βs[i], 0)
+        map(1 : o1) do τ1
+            rtn = zeros(ms[i], ms[j])
+            for k in 1 : lenα
+                if αβmatrix[k, i] && αβmatrix[k, j]
+                    coeff = on_the_fly ? on_the_fly_calc2(Nc, (αs[k], βs[j], βs[i])) : tables[2][αs[k], βs[j], βs[i]]
+                    for l in 1 : mαβ[k, i]
+                        rtn[cum_mαβ[k, i] + l, cum_mαβ[k, j] + l] = fac * coeff[τ1]
+                    end
+                end
+            end
+            rtn
+        end
+    end
+end
+
+function _make_enlarged_block(::Type{<:CPUEngine}, ::Val{Nc}, len, bonds, αs, mαs, βs, ms, mαβ, Hnew, tensor_dict) where Nc
+    EnlargedBlockCPU{Nc}(len, bonds, αs, mαs, βs, ms, mαβ, Dict{Symbol, Vector{Matrix{Float64}}}(:H => Hnew), tensor_dict)
+end
+
+function _make_enlarged_block(::Type{<:GPUEngine}, ::Val{Nc}, len, bonds, αs, mαs, βs, ms, mαβ, Hnew, tensor_dict) where Nc
+    EnlargedBlockGPU{Nc}(len, bonds, αs, mαs, βs, ms, mαβ, Dict{Symbol, Vector{CuMatrix{Float64}}}(:H => Hnew), tensor_dict)
 end
 
 """
@@ -42,7 +75,6 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
         αs = copy(block.β_list)
         lenα = length(αs)
         funda = fundamentalirrep(Val(Nc))
-        adjoint = adjointirrep(Val(Nc))
 
         dest = map(α -> unique(keys(directproduct(α, funda))), αs)
         βs = sort!(filter!(β -> on_the_fly || weight(β)[1] <= widthmax, union(dest[block.mβ_list .> 0]...)))
@@ -55,25 +87,9 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
     end
 
     zy = (x -> x <= Ly ? x : 2Ly + 1 - x)(mod1(block.length + 1, 2Ly))
-    tensor_dict = engine <: GPUEngine ? Dict{Int, Matrix{Vector{CuMatrix{Float64}}}}() : Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
+    tensor_dict = empty_engine_tensor_dict(engine)
     if rank == 0
-        fac1 = sqrt((Nc ^ 2 - 1) / Nc)
-        dp = [directproduct(βs[j], adjoint) for j in 1 : lenβ]
-        Stemp = map([(i, j) for i in 1 : lenβ, j in 1 : lenβ]) do (i, j)
-            o1 = get(dp[j], βs[i], 0)
-            map(1 : o1) do τ1
-                rtn = zeros(ms[i], ms[j])
-                for k in 1 : lenα
-                    if αβmatrix[k, i] && αβmatrix[k, j]
-                        coeff = on_the_fly ? on_the_fly_calc2(Nc, (αs[k], βs[j], βs[i])) : tables[2][αs[k], βs[j], βs[i]]
-                        for l in 1 : mαβ[k, i]
-                            rtn[cum_mαβ[k, i] + l, cum_mαβ[k, j] + l] = fac1 * coeff[τ1]
-                        end
-                    end
-                end
-                rtn
-            end
-        end
+        Stemp = _build_spin_tensor(Nc, αs, βs, mαβ, αβmatrix, cum_mαβ, tables, on_the_fly)
         MPI.bcast(ms, 0, comm)
         om = length.(Stemp)
         MPI.bcast(om, 0, comm)
@@ -121,11 +137,7 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
                                     coeff = on_the_fly ? on_the_fly_calc3(Nc, (αs[j], βs[k], αs[i])) : tables[3][αs[j], βs[k], αs[i]]
                                     for τ1 in 1 : o1
                                         temp2 = fac2 * coeff[τ1]
-                                        # if engine <: GPUEngine
-                                        #     temp3 = CuArray(block_tensor_dict[z][i, j][τ1])
-                                        # else
                                         temp3 = block_tensor_dict[z][i, j][τ1]
-                                        # end
                                         @. rtn[cum_mαβ[i, k] + 1 : cum_mαβ[i + 1, k], cum_mαβ[j, k] + 1 : cum_mαβ[j + 1, k]] += temp2 * temp3
                                     end
                                 end
@@ -153,21 +165,14 @@ function enlarge_block(block::Block{Nc}, block_tensor_dict, Ly, widthmax, signfa
         MPI.Bcast!(Hnew[k], 0, comm)
     end
 
-    if rank == 0
-        if engine <: GPUEngine
-            block_enl = EnlargedBlockGPU{Nc}(block.length + 1, bonds, αs, copy(block.mβ_list_old), βs, ms, mαβ, Dict{Symbol, Vector{CuMatrix{Float64}}}(:H => Hnew), tensor_dict)
-        else
-            block_enl = EnlargedBlockCPU{Nc}(block.length + 1, bonds, αs, copy(block.mβ_list_old), βs, ms, mαβ, Dict{Symbol, Vector{Matrix{Float64}}}(:H => Hnew), tensor_dict)
-        end
-    else
-        if engine <: GPUEngine
-            block_enl = EnlargedBlockGPU{Nc}(block.length + 1, Tuple{Int, Int}[], typeof(trivialirrep(Val(Nc)))[], Int[], typeof(trivialirrep(Val(Nc)))[], Int[], zeros(Int, 0, 0), Dict{Symbol, Vector{CuMatrix{Float64}}}(:H => Hnew), tensor_dict)
-        else
-            block_enl = EnlargedBlockCPU{Nc}(block.length + 1, Tuple{Int, Int}[], typeof(trivialirrep(Val(Nc)))[], Int[], typeof(trivialirrep(Val(Nc)))[], Int[], zeros(Int, 0, 0), Dict{Symbol, Vector{Matrix{Float64}}}(:H => Hnew), tensor_dict)
-        end
+    if rank != 0
+        bonds = Tuple{Int, Int}[]
+        αs = typeof(trivialirrep(Val(Nc)))[]
+        βs = typeof(trivialirrep(Val(Nc)))[]
+        mαβ = zeros(Int, 0, 0)
     end
 
-    block_enl
+    _make_enlarged_block(engine, Val(Nc), block.length + 1, bonds, αs, rank == 0 ? copy(block.mβ_list_old) : Int[], βs, ms, mαβ, Hnew, tensor_dict)
 end
 
 """
@@ -175,7 +180,7 @@ env_tensor_dict = spin_operators!(storage, env, env_label, Ly, widthmax, signfac
 generates spin operators for the environment
 """
 function spin_operators!(storage::AbstractInternalStorage, env::Block{Nc}, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = :square) where Nc
-    env_tensor_dict = engine <: GPUEngine ? Dict{Int, Matrix{Vector{CuMatrix{Float64}}}}() : Dict{Int, Matrix{Vector{Matrix{Float64}}}}()
+    env_tensor_dict = empty_engine_tensor_dict(engine)
     y_conn = (x -> x <= Ly ? x : 2Ly + 1 - x)(mod1(env.length, 2Ly))
     for y in 1 : min(env.length, Ly)
         if lattice != :honeycombZC || y == y_conn || ((mod1(env.length, 2Ly) <= Ly) ? y == 1 : y == Ly) || (y <= y_conn ? iseven(y) : isodd(y))
@@ -201,23 +206,7 @@ function spin_operators!(storage::AbstractInternalStorage, env::Block{Nc}, env_l
                     cum_mαβ = vcat(zeros(Int, 1, lenβ), cumsum(mαβ, dims = 1))
                     ms = cum_mαβ[end, :]
 
-                    fac1 = sqrt((Nc ^ 2 - 1) / Nc)
-                    dp = [directproduct(βs[j], adjoint) for j in 1 : lenβ]
-                    Stemp = map([(i, j) for i in 1 : lenβ, j in 1 : lenβ]) do (i, j)
-                        o1 = get(dp[j], βs[i], 0)
-                        map(1 : o1) do τ1
-                            rtn = zeros(ms[i], ms[j])
-                            for k in 1 : lenα
-                                if αβmatrix[k, i] && αβmatrix[k, j]
-                                    coeff = on_the_fly ? on_the_fly_calc2(Nc, (αs[k], βs[j], βs[i])) : tables[2][αs[k], βs[j], βs[i]]
-                                    for l in 1 : mαβ[k, i]
-                                        rtn[cum_mαβ[k, i] + l, cum_mαβ[k, j] + l] = fac1 * coeff[τ1]
-                                    end
-                                end
-                            end
-                            rtn
-                        end
-                    end
+                    Stemp = _build_spin_tensor(Nc, αs, βs, mαβ, αβmatrix, cum_mαβ, tables, on_the_fly)
 
                     Snew = [to_engine_array.(Ref(engine), Stemp[i, j]) for i in 1 : lenβ, j in 1 : lenβ]
 
@@ -225,7 +214,7 @@ function spin_operators!(storage::AbstractInternalStorage, env::Block{Nc}, env_l
 
                     lennew = length(env_trmat)
                     ms = map(k -> size(env_trmat[k], 2), 1 : lennew)
-                    Sold = map(k -> isempty(Snew[k...]) ? (engine <: GPUEngine ? CuMatrix{Float64}[] : Matrix{Float64}[]) : [env_trmat[k[1]]' * (M * env_trmat[k[2]]) for M in Snew[k...]], [(ki, kj) for ki in 1 : lennew, kj in 1 : lennew])
+                    Sold = map(k -> isempty(Snew[k...]) ? empty_engine_matrix_vector(engine) : [env_trmat[k[1]]' * (M * env_trmat[k[2]]) for M in Snew[k...]], [(ki, kj) for ki in 1 : lennew, kj in 1 : lennew])
 
                     for x in z + 1 : env.length
                         if engine <: GPUEngine

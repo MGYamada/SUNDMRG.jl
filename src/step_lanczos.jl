@@ -50,11 +50,7 @@ function _step_spin_operator(x, conn, connS, ms, βs, dp, enlarging, tensor_dict
     if x == conn
         return connS
     elseif x > 0
-        spin = [[zeros_like_engine(engine, Float64, ms[i], ms[j]) for τ1 in 1 : get(dp[j], βs[i], 0)] for i in eachindex(ms), j in eachindex(ms)]
-        for e in enlarging
-            @. spin[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * tensor_dict_hold[x][e.ki, e.kj][e.τ2]
-        end
-        return spin
+        return _enlarged_spin_tensor(ms, βs, dp, enlarging, tensor_dict_hold[x], engine)
     end
 
     return nothing

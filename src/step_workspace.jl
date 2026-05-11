@@ -152,10 +152,10 @@ function _connection_tensor(block_enl, conn, held_sites)
 end
 
 function _prepare_step_workspace(sys, env, sys_tensor_dict, env_tensor_dict, sys_enl, env_enl, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, lattice, ::Val{Nc}) where Nc
-    sys_αs = MPI.bcast(sys_enl.α_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
-    env_αs = MPI.bcast(env_enl.α_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
-    sys_βs = MPI.bcast(sys_enl.β_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
-    env_βs = MPI.bcast(env_enl.β_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
+    sys_αs = MPI.bcast(sys_enl.α_list, 0, comm)::Vector{SUNIrrep{Nc}}
+    env_αs = MPI.bcast(env_enl.α_list, 0, comm)::Vector{SUNIrrep{Nc}}
+    sys_βs = MPI.bcast(sys_enl.β_list, 0, comm)::Vector{SUNIrrep{Nc}}
+    env_βs = MPI.bcast(env_enl.β_list, 0, comm)::Vector{SUNIrrep{Nc}}
     sys_ms = MPI.bcast(sys_enl.mβ_list, 0, comm)::Vector{Int}
     env_ms = MPI.bcast(env_enl.mβ_list, 0, comm)::Vector{Int}
     sys_mαβ = MPI.bcast(sys_enl.mαβ, 0, comm)::Matrix{Int}

@@ -1,16 +1,16 @@
-mutable struct _SweepState
-    Ψ0
-    Sj
+mutable struct _SweepState{ΨT,SjT,SysBlockT,EnvBlockT,SysTensorT,EnvTensorT,SysTrmatT,EnvTrmatT,SysEnlT,EnvEnlT}
+    Ψ0::ΨT
+    Sj::SjT
     sys_label::Symbol
     env_label::Symbol
-    sys_block
-    env_block
-    sys_tensor_dict
-    env_tensor_dict
-    sys_trmat
-    env_trmat
-    sys_block_enl
-    env_block_enl
+    sys_block::SysBlockT
+    env_block::EnvBlockT
+    sys_tensor_dict::SysTensorT
+    env_tensor_dict::EnvTensorT
+    sys_trmat::SysTrmatT
+    env_trmat::EnvTrmatT
+    sys_block_enl::SysEnlT
+    env_block_enl::EnvEnlT
 end
 
 function _load_sweep_env(storage, env_label, env_len, config::_FiniteRunConfig, runtime::_FiniteRuntime, ::Val{Nc}) where Nc
@@ -103,14 +103,6 @@ function _sweep_step!(SiSj, state::_SweepState, EE, storage, L, m, measurement, 
     end
 
     return result
-end
-
-function _record_sweep_result!(m_list, errors, energies, EEs, m, result::DMRGStepResult)
-    push!(m_list, m)
-    push!(errors, result.trerr)
-    push!(energies, result.energy)
-    push!(EEs, result.ee)
-    return result.es
 end
 
 function _update_measurement_flag(measurement, energies, EEs, config::_FiniteRunConfig, runtime::_FiniteRuntime)
