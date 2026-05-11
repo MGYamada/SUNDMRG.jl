@@ -1,6 +1,15 @@
 # Changelog
 
-## v1.5.1 - 2026-05-11
+## v1.5.2
+
+### Changed
+
+- Bumped package version to v1.5.2.
+- Enabled Documenter deployment to the `gh-pages` branch from CI.
+- Refactored the finite-growth phase into smaller internal helpers.
+- Centralized worker placeholder block and environment allocation.
+
+## v1.5.1
 
 ### Changed
 
@@ -9,7 +18,7 @@
 - Added usage, examples, and API reference documentation pages.
 - Added docstrings for the main public model, lattice, engine, MPI lifecycle, and table-generation APIs.
 
-## v1.5.0 - 2026-05-11
+## v1.5.0
 
 ### Changed
 

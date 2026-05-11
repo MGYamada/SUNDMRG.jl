@@ -7,7 +7,7 @@ makedocs(;
     sitename = "SUNDMRG.jl",
     modules = [SUNDMRG],
     checkdocs = :none,
-    format = Documenter.HTML(; prettyurls = false),
+    format = Documenter.HTML(; prettyurls = get(ENV, "CI", "false") == "true"),
     pages = [
         "Home" => "index.md",
         "DMRG Overview" => "dmrg_overview.md",
@@ -18,4 +18,9 @@ makedocs(;
         "Representation Labels in SUNDMRG.jl" => "representation_notation.md",
         "API Reference" => "api.md",
     ],
+)
+
+deploydocs(;
+    repo = "github.com/MGYamada/SUNDMRG.jl.git",
+    devbranch = "main",
 )
