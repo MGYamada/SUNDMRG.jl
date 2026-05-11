@@ -37,7 +37,7 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Instantiate docs
         run: |
-          julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.add(url="https://github.com/MGYamada/MAGMA.jl.git"); Pkg.instantiate()'
+          julia --project=docs -e 'using Pkg; Pkg.add(url="https://github.com/MGYamada/MAGMA.jl.git"); Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Build docs
         run: julia --project=docs docs/make.jl
         env:
