@@ -1,16 +1,7 @@
-function _dmrg_step_tuple(::Val{env_calc}, newblock, newtensor_dict, newblock_enl, truncation_error, energy, Ψ0, trmat, ee, es, Sj) where env_calc
-    if env_calc
-        return newblock[1], newtensor_dict[1], newblock_enl[1], truncation_error[1], energy, Ψ0, trmat[1], ee[1], es[1], newblock[2], newtensor_dict[2], newblock_enl[2], trmat[2]
-    end
-
-    return newblock[1], newtensor_dict[1], newblock_enl[1], truncation_error[1], energy, Ψ0, trmat[1], ee[1], es[1], Sj
-end
-
 """
     dmrg_step!(...)
 
-A single DMRG step. This keeps the historical tuple return value; finite-run
-drivers should prefer `dmrg_step_result!` so field access is explicit.
+A single DMRG step, returned as a `DMRGStepResult` with explicit fields.
 """
 function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_dict, env_tensor_dict, sys_enl::EnlargedBlock{Nc}, env_enl::EnlargedBlock{Nc}, Ly, m, α, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, ::Val{env_calc}; Ψ0_guess = nothing, ES_max = -Inf, correlation = :none, margin = 0, lattice = :square, Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0), alg = :slow, noisy = true) where {Nc, env_calc}
     workspace = _prepare_step_workspace(sys, env, sys_tensor_dict, env_tensor_dict, sys_enl, env_enl, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, lattice, Val(Nc))
@@ -88,54 +79,41 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
     end
 
     _report_overlap(Ψ0_guess, Ψ0, comm, rank, noisy)
-    return _dmrg_step_tuple(Val(env_calc), newblock, newtensor_dict, newblock_enl, truncation_error, energy, Ψ0, trmat, ee, es, Sj)
-end
-
-struct DMRGStepResult
-    block
-    tensor_dict
-    block_enl
-    trerr
-    energy
-    Ψ
-    trmat
-    ee
-    es
-    Sj
-    env_block
-    env_tensor_dict
-    env_block_enl
-    env_trmat
-end
-
-function _dmrg_step_result(parts::Tuple)
-    if length(parts) ∉ (10, 13)
-        throw(ArgumentError("dmrg_step! returned $(length(parts)) values; expected 10 or 13"))
-    end
-
-    env_block = length(parts) == 13 ? parts[10] : nothing
-    env_tensor_dict = length(parts) == 13 ? parts[11] : nothing
-    env_block_enl = length(parts) == 13 ? parts[12] : nothing
-    env_trmat = length(parts) == 13 ? parts[13] : nothing
-
-    DMRGStepResult(
-        parts[1],
-        parts[2],
-        parts[3],
-        parts[4],
-        parts[5],
-        parts[6],
-        parts[7],
-        parts[8],
-        parts[9],
-        length(parts) == 10 ? parts[10] : nothing,
-        env_block,
-        env_tensor_dict,
-        env_block_enl,
-        env_trmat,
+    return DMRGStepResult(
+        newblock[1],
+        newtensor_dict[1],
+        newblock_enl[1],
+        truncation_error[1],
+        energy,
+        Ψ0,
+        trmat[1],
+        ee[1],
+        es[1],
+        env_calc ? nothing : Sj,
+        env_calc ? newblock[2] : nothing,
+        env_calc ? newtensor_dict[2] : nothing,
+        env_calc ? newblock_enl[2] : nothing,
+        env_calc ? trmat[2] : nothing,
     )
 end
 
+struct DMRGStepResult{B,T,BEnl,ΨT,TrT,EST,SJT,EB,ET,EBEnl,ETrT}
+    block::B
+    tensor_dict::T
+    block_enl::BEnl
+    trerr::Float64
+    energy::Float64
+    Ψ::ΨT
+    trmat::TrT
+    ee::Float64
+    es::EST
+    Sj::SJT
+    env_block::EB
+    env_tensor_dict::ET
+    env_block_enl::EBEnl
+    env_trmat::ETrT
+end
+
 function dmrg_step_result!(args...; kwargs...)
-    _dmrg_step_result(dmrg_step!(args...; kwargs...))
+    dmrg_step!(args...; kwargs...)
 end

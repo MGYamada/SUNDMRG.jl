@@ -29,6 +29,32 @@ function _empty_density_matrix_vector(engine)
     empty_engine_matrix_vector(engine)
 end
 
+function _syrk!(::Type{<:CPUEngine}, uplo, trans, α, A, β, C)
+    BLAS.syrk!(uplo, trans, α, A, β, C)
+end
+
+function _syrk!(::Type{<:GPUEngine}, uplo, trans, α, A, β, C)
+    CUBLAS.syrk!(uplo, trans, α, A, β, C)
+end
+
+function _density_syev!(::Type{<:CPUEngine}, ρ)
+    LAPACK.syev!('V', 'U', ρ)
+end
+
+function _density_syev!(::Type{<:GPUEngine}, ρ)
+    magma_syevd!('V', 'U', ρ)
+end
+
+function _density_matrix_from_wavefunction!(ρ, Ψ0, fac, trans, engine)
+    for Ψ in Ψ0
+        for J in eachindex(Ψ)
+            _syrk!(engine, 'U', trans, fac, Ψ[J], 1.0, ρ)
+        end
+    end
+    synchronize_engine(engine)
+    return ρ
+end
+
 function _reduced_density_matrices(Ψ0, switch, side::_StepSideContext, dimβ, sys_len, env_len, context::_StepDensityContext)
     (; len, ms) = side
     (; comm, rank, engine) = context
@@ -37,22 +63,8 @@ function _reduced_density_matrices(Ψ0, switch, side::_StepSideContext, dimβ, s
     if switch == 1
         for k in 1 : len
             fac = 1.0 / dimβ[k]
-            if engine <: GPUEngine
-                ρ = zeros_like_engine(engine, Float64, ms[k], ms[k])
-                for j in 1 : env_len
-                    for J in eachindex(Ψ0[j, k])
-                        CUBLAS.syrk!('U', 'T', fac, Ψ0[j, k][J], 1.0, ρ)
-                    end
-                end
-                CUDA.synchronize()
-            else
-                ρ = zeros_like_engine(engine, Float64, ms[k], ms[k])
-                for j in 1 : env_len
-                    for J in eachindex(Ψ0[j, k])
-                        BLAS.syrk!('U', 'T', fac, Ψ0[j, k][J], 1.0, ρ)
-                    end
-                end
-            end
+            ρ = zeros_like_engine(engine, Float64, ms[k], ms[k])
+            _density_matrix_from_wavefunction!(ρ, (Ψ0[j, k] for j in 1 : env_len), fac, 'T', engine)
             MPI.Reduce!(ρ, MPI.SUM, 0, comm)
             if rank == 0
                 push!(ρs, ρ)
@@ -61,22 +73,8 @@ function _reduced_density_matrices(Ψ0, switch, side::_StepSideContext, dimβ, s
     else
         for k in 1 : len
             fac = 1.0 / dimβ[k]
-            if engine <: GPUEngine
-                ρ = zeros_like_engine(engine, Float64, ms[k], ms[k])
-                for j in 1 : sys_len
-                    for J in eachindex(Ψ0[k, j])
-                        CUBLAS.syrk!('U', 'N', fac, Ψ0[k, j][J], 1.0, ρ)
-                    end
-                end
-                CUDA.synchronize()
-            else
-                ρ = zeros_like_engine(engine, Float64, ms[k], ms[k])
-                for j in 1 : sys_len
-                    for J in eachindex(Ψ0[k, j])
-                        BLAS.syrk!('U', 'N', fac, Ψ0[k, j][J], 1.0, ρ)
-                    end
-                end
-            end
+            ρ = zeros_like_engine(engine, Float64, ms[k], ms[k])
+            _density_matrix_from_wavefunction!(ρ, (Ψ0[k, j] for j in 1 : sys_len), fac, 'N', engine)
             MPI.Reduce!(ρ, MPI.SUM, 0, comm)
             if rank == 0
                 push!(ρs, ρ)
@@ -114,13 +112,7 @@ end
 function _density_eigendecomposition(ρnew, context::_StepDensityContext)
     (; engine) = context
     local λζtemp
-    time_DM = @elapsed begin
-        if engine <: GPUEngine
-            λζtemp = map(ρ -> magma_syevd!('V', 'U', ρ), ρnew)
-        else
-            λζtemp = map(ρ -> LAPACK.syev!('V', 'U', ρ), ρnew)
-        end
-    end
+    time_DM = @elapsed λζtemp = map(ρ -> _density_syev!(engine, ρ), ρnew)
 
     return λζtemp, time_DM
 end
@@ -204,16 +196,10 @@ function _apply_density_matrix_correction!(ρs, switch, side::_StepSideContext, 
         else
             if switch == 1
                 Sx = haskey(sys_tensor_dict_hold, x) ? sys_tensor_dict_hold[x] : sys_tensor_dict[x]
-                Stemp = [[zeros_like_engine(engine, Float64, sys_ms[i], sys_ms[j]) for τ1 in 1 : get(sys_dp[j], sys_βs[i], 0)] for i in eachindex(sys_ms), j in eachindex(sys_ms)]
-                for e in sys_enlarge
-                    @. Stemp[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * Sx[e.ki, e.kj][e.τ2]
-                end
+                Stemp = _enlarged_spin_tensor(sys_ms, sys_βs, sys_dp, sys_enlarge, Sx, engine)
             else
                 Sx = haskey(env_tensor_dict_hold, x) ? env_tensor_dict_hold[x] : env_tensor_dict[x]
-                Stemp = [[zeros_like_engine(engine, Float64, env_ms[i], env_ms[j]) for τ1 in 1 : get(env_dp[j], env_βs[i], 0)] for i in eachindex(env_ms), j in eachindex(env_ms)]
-                for e in env_enlarge
-                    @. Stemp[e.i, e.j][e.τ1][e.range_i, e.range_j] += e.coeff * Sx[e.ki, e.kj][e.τ2]
-                end
+                Stemp = _enlarged_spin_tensor(env_ms, env_βs, env_dp, env_enlarge, Sx, engine)
             end
         end
 

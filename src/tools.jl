@@ -9,10 +9,10 @@ function eig_prediction(Ψ0, sys_label, sys_enl::EnlargedBlock{Nc}, env_enl::Enl
     env_mαβ = MPI.bcast(env_enl.mαβ, 0, comm)::Matrix{Int}
     cum_sys_mαβ = vcat(zeros(Int, 1, size(sys_mαβ, 2)), cumsum(sys_mαβ, dims = 1))
     cum_env_mαβ = vcat(zeros(Int, 1, size(env_mαβ, 2)), cumsum(env_mαβ, dims = 1))
-    sys_αs = MPI.bcast(sys_enl.α_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
-    sys_βs = MPI.bcast(sys_enl.β_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
-    env_αs = MPI.bcast(env_enl.α_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
-    env_βs = MPI.bcast(env_enl.β_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
+    sys_αs = MPI.bcast(sys_enl.α_list, 0, comm)::Vector{SUNIrrep{Nc}}
+    sys_βs = MPI.bcast(sys_enl.β_list, 0, comm)::Vector{SUNIrrep{Nc}}
+    env_αs = MPI.bcast(env_enl.α_list, 0, comm)::Vector{SUNIrrep{Nc}}
+    env_βs = MPI.bcast(env_enl.β_list, 0, comm)::Vector{SUNIrrep{Nc}}
     OM = OM_matrix(sys_βs, env_αs, γirrep)
     sys_mα = MPI.bcast(sys_enl.mα_list, 0, comm)::Vector{Int}
     sys_mβ = MPI.bcast(sys_enl.mβ_list, 0, comm)::Vector{Int}
@@ -95,8 +95,8 @@ end
 function _wavefunction_reverse(Ψ0, sys_label, sys, env, widthmax, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, Nc)
     γirrep = γ_list[mod1(sys.length + env.length, Nc)]
 
-    sys_βs = MPI.bcast(sys.β_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
-    env_βs = MPI.bcast(env.β_list, 0, comm)::Vector{<:SUNIrrep{Nc}}
+    sys_βs = MPI.bcast(sys.β_list, 0, comm)::Vector{SUNIrrep{Nc}}
+    env_βs = MPI.bcast(env.β_list, 0, comm)::Vector{SUNIrrep{Nc}}
 
     Ψ0_new = [[zeros_like_engine(engine, Float64, size(Ψ0[i, j][J], 2), size(Ψ0[i, j][J], 1)) for J in 1 : length(Ψ0[i, j])] for j in 1 : size(Ψ0, 2), i in 1 : size(Ψ0, 1)]
 

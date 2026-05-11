@@ -22,24 +22,13 @@ function run_DMRG end
 
 _dmrg_schedule(m::Int) = (m, 0.0)
 _dmrg_schedule(m::Tuple{Int, Float64}) = m
-_dmrg_schedule_list(ms::Vector{Int}) = _dmrg_schedule.(ms)
-_dmrg_schedule_list(ms::Vector{Tuple{Int, Float64}}) = ms
+_dmrg_schedule_list(ms::AbstractVector) = _dmrg_schedule.(ms)
 
-function run_DMRG(model::HeisenbergModelSU{Nc}, lat::SquareLattice, m_warmup::Int, m_sweep_list::Vector{Int}, m_cooldown::Int, engine::Type{<:Engine}; kwargs...) where Nc
+function run_DMRG(model::HeisenbergModelSU{Nc}, lat::SquareLattice, m_warmup::Union{Int, Tuple{Int, Float64}}, m_sweep_list::AbstractVector, m_cooldown::Union{Int, Tuple{Int, Float64}}, engine::Type{<:Engine}; kwargs...) where Nc
     _run_DMRG(model, :square, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
 end
 
-function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup::Int, m_sweep_list::Vector{Int}, m_cooldown::Int, engine::Type{<:Engine}; kwargs...) where Nc
-    if lat.BC == :ZC
-        _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
-    end
-end
-
-function run_DMRG(model::HeisenbergModelSU{Nc}, lat::SquareLattice, m_warmup::Tuple{Int, Float64}, m_sweep_list::Vector{Tuple{Int, Float64}}, m_cooldown::Tuple{Int, Float64}, engine::Type{<:Engine}; kwargs...) where Nc
-    _run_DMRG(model, :square, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
-end
-
-function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup::Tuple{Int, Float64}, m_sweep_list::Vector{Tuple{Int, Float64}}, m_cooldown::Tuple{Int, Float64}, engine::Type{<:Engine}; kwargs...) where Nc
+function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup::Union{Int, Tuple{Int, Float64}}, m_sweep_list::AbstractVector, m_cooldown::Union{Int, Tuple{Int, Float64}}, engine::Type{<:Engine}; kwargs...) where Nc
     if lat.BC == :ZC
         _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
     end

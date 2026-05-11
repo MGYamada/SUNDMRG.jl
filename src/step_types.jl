@@ -34,157 +34,157 @@ struct BlockEnlarging
     coeff::Float64
     τ1::Int
     τ2::Int
-    range_i::UnitRange
-    range_j::UnitRange
+    range_i::UnitRange{Int}
+    range_j::UnitRange{Int}
     i::Int
     j::Int
     ki::Int
     kj::Int
 end
 
-struct _StepSideContext
+struct _StepSideContext{MS,B,D,BT,BET}
     len::Int
-    ms
-    betas
-    dp
+    ms::MS
+    betas::B
+    dp::D
     conn::Int
     label::Symbol
-    block
-    block_enl
+    block::BT
+    block_enl::BET
 end
 
-struct _StepLanczosContext
+struct _StepLanczosContext{CommT,E,H1,BondsT,SysConnT,EnvConnT,MST,BetaT,DPT,EnlargeT,SysTensorT,EnvTensorT,H2T,OMT}
     target::Int
-    comm
+    comm::CommT
     rank::Int
-    engine
+    engine::Type{E}
     alg::Symbol
-    superblock_H1
-    bonds_hold
+    superblock_H1::H1
+    bonds_hold::BondsT
     x_conn::Int
     y_conn::Int
-    sys_connS
-    env_connS
-    sys_ms
-    env_ms
-    sys_βs
-    env_βs
-    sys_dp
-    env_dp
-    sys_enlarge
-    env_enlarge
-    sys_tensor_dict_hold
-    env_tensor_dict_hold
-    superblock_H2
-    OM
+    sys_connS::SysConnT
+    env_connS::EnvConnT
+    sys_ms::MST
+    env_ms::MST
+    sys_βs::BetaT
+    env_βs::BetaT
+    sys_dp::DPT
+    env_dp::DPT
+    sys_enlarge::EnlargeT
+    env_enlarge::EnlargeT
+    sys_tensor_dict_hold::SysTensorT
+    env_tensor_dict_hold::EnvTensorT
+    superblock_H2::H2T
+    OM::OMT
     sys_len::Int
     env_len::Int
     Ncpu::Int
 end
 
-struct _StepDensityContext
-    comm
+struct _StepDensityContext{CommT,E}
+    comm::CommT
     rank::Int
     Ncpu::Int
-    engine
+    engine::Type{E}
     α::Float64
     m::Int
     ES_max::Float64
     noisy::Bool
 end
 
-struct _StepMeasurementContext
-    SiSj
+struct _StepMeasurementContext{SiSjT,SysConnT,EnvConnT,SysTensorT,EnvTensorT,SysTensorHoldT,EnvTensorHoldT,BetaT,DPT,MST,EnlargeT,H2T,OMT,CommT,E}
+    SiSj::SiSjT
     Ly::Int
     x_conn::Int
     y_conn::Int
-    sys_connS
-    env_connS
+    sys_connS::SysConnT
+    env_connS::EnvConnT
     sys_len::Int
     env_len::Int
-    sys_tensor_dict
-    env_tensor_dict
-    sys_tensor_dict_hold
-    env_tensor_dict_hold
-    sys_αs
-    env_αs
-    sys_βs
-    env_βs
-    sys_dp
-    env_dp
-    sys_ms
-    env_ms
-    sys_enlarge
-    env_enlarge
-    superblock_H2
-    OM
-    comm
+    sys_tensor_dict::SysTensorT
+    env_tensor_dict::EnvTensorT
+    sys_tensor_dict_hold::SysTensorHoldT
+    env_tensor_dict_hold::EnvTensorHoldT
+    sys_αs::BetaT
+    env_αs::BetaT
+    sys_βs::BetaT
+    env_βs::BetaT
+    sys_dp::DPT
+    env_dp::DPT
+    sys_ms::MST
+    env_ms::MST
+    sys_enlarge::EnlargeT
+    env_enlarge::EnlargeT
+    superblock_H2::H2T
+    OM::OMT
+    comm::CommT
     rank::Int
     Ncpu::Int
-    engine
+    engine::Type{E}
     correlation::Symbol
     margin::Int
     lattice::Symbol
 end
 
-struct _StepBlockContext
+struct _StepBlockContext{CommT,TablesT,E}
     Ly::Int
     widthmax::Int
     signfactor::Float64
-    comm
+    comm::CommT
     rank::Int
     Ncpu::Int
-    tables
+    tables::TablesT
     on_the_fly::Bool
-    engine
+    engine::Type{E}
     lattice::Symbol
 end
 
-struct _StepCorrectionContext
-    superblock_bonds
-    sys_connS
-    env_connS
-    sys_enl
-    env_enl
+struct _StepCorrectionContext{BondsT,SysConnT,EnvConnT,SysEnlT,EnvEnlT,SysTensorHoldT,EnvTensorHoldT,SysTensorT,EnvTensorT,MST,DPT,BetaT,EnlargeT,E}
+    superblock_bonds::BondsT
+    sys_connS::SysConnT
+    env_connS::EnvConnT
+    sys_enl::SysEnlT
+    env_enl::EnvEnlT
     x_conn::Int
     y_conn::Int
-    sys_tensor_dict_hold
-    env_tensor_dict_hold
-    sys_tensor_dict
-    env_tensor_dict
-    sys_ms
-    env_ms
-    sys_dp
-    env_dp
-    sys_βs
-    env_βs
-    sys_enlarge
-    env_enlarge
-    engine
+    sys_tensor_dict_hold::SysTensorHoldT
+    env_tensor_dict_hold::EnvTensorHoldT
+    sys_tensor_dict::SysTensorT
+    env_tensor_dict::EnvTensorT
+    sys_ms::MST
+    env_ms::MST
+    sys_dp::DPT
+    env_dp::DPT
+    sys_βs::BetaT
+    env_βs::BetaT
+    sys_enlarge::EnlargeT
+    env_enlarge::EnlargeT
+    engine::Type{E}
 end
 
-struct _StepWorkspace
-    sys_αs
-    env_αs
-    sys_βs
-    env_βs
-    sys_ms
-    env_ms
+struct _StepWorkspace{SysAlphaT,EnvAlphaT,SysBetaT,EnvBetaT,SysMST,EnvMST,BondsT,HoldBondsT,SysDPT,EnvDPT,SysEnlargeT,EnvEnlargeT,OMT,H1T,H2T,SysConnT,EnvConnT,SysTensorT,EnvTensorT}
+    sys_αs::SysAlphaT
+    env_αs::EnvAlphaT
+    sys_βs::SysBetaT
+    env_βs::EnvBetaT
+    sys_ms::SysMST
+    env_ms::EnvMST
     sys_len::Int
     env_len::Int
-    superblock_bonds
-    bonds_hold
+    superblock_bonds::BondsT
+    bonds_hold::HoldBondsT
     x_conn::Int
     y_conn::Int
-    sys_dp
-    env_dp
-    sys_enlarge
-    env_enlarge
-    OM
-    superblock_H1
-    superblock_H2
-    sys_connS
-    env_connS
-    sys_tensor_dict_hold
-    env_tensor_dict_hold
+    sys_dp::SysDPT
+    env_dp::EnvDPT
+    sys_enlarge::SysEnlargeT
+    env_enlarge::EnvEnlargeT
+    OM::OMT
+    superblock_H1::H1T
+    superblock_H2::H2T
+    sys_connS::SysConnT
+    env_connS::EnvConnT
+    sys_tensor_dict_hold::SysTensorT
+    env_tensor_dict_hold::EnvTensorT
 end
