@@ -115,8 +115,7 @@ function _update_measurement_flag(measurement, energies, EEs, config::_FiniteRun
 
     if isroot(runtime)
         measurement = abs((energies[end] - energies[end - 1]) / energies[end]) < tol_energy && abs((EEs[end] - EEs[end - 1]) / EEs[end]) < tol_EE
-        MPI.bcast(measurement, 0, comm)
-        return measurement
+        return MPI.bcast(measurement, 0, comm)::Bool
     end
 
     MPI.bcast(nothing, 0, comm)::Bool

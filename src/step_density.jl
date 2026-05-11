@@ -1,25 +1,14 @@
-function _density_matrix_balancer(ms, Ncpu, rank)
+function _density_matrix_balancer(ms, Ncpu, rank)::Vector{Int}
     len = length(ms)
     balancer = zeros(Int, len)
     if rank == 0 && Ncpu > 1 && len > 0
         max_m = maximum(ms)
         loads = @. (ms / max_m) ^ 3
         load_sum = zeros(Float64, Ncpu)
-        load_sum[1] = sum(loads)
-        load_max = maximum(load_sum)
-        for i in 1 : 100
-            j = rand(1 : len)
-            new_b = rand(filter(x -> x != balancer[j], 0 : Ncpu - 1))
-            load_sum[balancer[j] + 1] -= loads[j]
-            load_sum[new_b + 1] += loads[j]
-            new_load_max = maximum(load_sum)
-            if log(rand()) < 100.0 * (load_max - new_load_max)
-                balancer[j] = new_b
-                load_max = new_load_max
-            else
-                load_sum[balancer[j] + 1] += loads[j]
-                load_sum[new_b + 1] -= loads[j]
-            end
+        for j in sortperm(loads; rev = true)
+            b = argmin(load_sum)
+            balancer[j] = b - 1
+            load_sum[b] += loads[j]
         end
     end
     return balancer

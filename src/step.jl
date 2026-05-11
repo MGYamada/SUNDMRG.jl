@@ -27,7 +27,7 @@ function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_
         (; len, ms, dp, conn, label, block, block_enl) = side
         βs = side.betas
 
-        balancer = _density_matrix_balancer(ms, density_context.Ncpu, density_context.rank)
+        balancer::Vector{Int} = _density_matrix_balancer(ms, density_context.Ncpu, density_context.rank)
         MPI.Bcast!(balancer, 0, comm)
 
         dimβ = dim.(βs)

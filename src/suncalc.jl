@@ -148,6 +148,7 @@ function wigner9ν(ν1::SUNIrrep{Nc}, ν2::SUNIrrep{Nc}, ν12::SUNIrrep{Nc}, ν3
             return reshape([sqrt((μ12 + 1) * (μ34 + 1) * (μ13 + 1) * (μ24 + 1)) * wigner9j(j1, j2, j12, j3, j4, j34, j13, j24, j)], 1, 1, 1, 1, 1, 1)
         end
     end
+    throw(ArgumentError("on-the-fly wigner9ν is implemented only for SU(2); use precomputed tables for SU(N > 2)"))
 end
 
 """

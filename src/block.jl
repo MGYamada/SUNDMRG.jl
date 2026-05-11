@@ -1,3 +1,4 @@
+# Scalar dictionaries currently carry :H and leave room for additional scalar operators.
 const ScalarDictCPU = Dict{Symbol, Vector{Matrix{Float64}}}
 const TensorMatrixCPU = Matrix{Vector{Matrix{Float64}}}
 const TensorDictCPU = Dict{Int, TensorMatrixCPU}
