@@ -53,6 +53,69 @@ struct _StepSideContext{MS,B,D,BT,BET}
     block_enl::BET
 end
 
+struct _DMRGStepBlocks{SysT,EnvT,SysTensorT,EnvTensorT,SysEnlT,EnvEnlT}
+    sys_label::Symbol
+    sys::SysT
+    env::EnvT
+    sys_tensor_dict::SysTensorT
+    env_tensor_dict::EnvTensorT
+    sys_enl::SysEnlT
+    env_enl::EnvEnlT
+end
+
+struct _DMRGStepSchedule
+    m::Int
+    α::Float64
+end
+
+struct _DMRGStepSettings{TablesT,OnTheFlyT,GammaT,AlgT,LatticeT}
+    Ly::Int
+    widthmax::Int
+    target::Int
+    signfactor::Float64
+    tables::TablesT
+    on_the_fly::OnTheFlyT
+    γ_list::GammaT
+    alg::AlgT
+    lattice::LatticeT
+end
+
+struct _DMRGStepRuntime{CommT,E}
+    comm::CommT
+    rank::Int
+    Ncpu::Int
+    engine::Type{E}
+end
+
+struct _DMRGStepOptions{GuessT,CorrelationT,SjT}
+    Ψ0_guess::GuessT
+    ES_max::Float64
+    correlation::CorrelationT
+    margin::Int
+    Sj::SjT
+    noisy::Bool
+end
+
+struct _DMRGStepRequest{EnvCalc,BlocksT,ScheduleT,OptionsT}
+    blocks::BlocksT
+    schedule::ScheduleT
+    options::OptionsT
+end
+
+function _DMRGStepRequest(blocks, schedule, options, ::Val{env_calc}) where env_calc
+    _DMRGStepRequest{env_calc,typeof(blocks),typeof(schedule),typeof(options)}(blocks, schedule, options)
+end
+
+struct _DMRGStepOutputBuffers{BlockT,BlockEnlT,TrmatT,TensorT,EET,EST,TrerrT}
+    newblock::BlockT
+    newblock_enl::BlockEnlT
+    trmat::TrmatT
+    newtensor_dict::TensorT
+    ee::EET
+    es::EST
+    truncation_error::TrerrT
+end
+
 struct _StepLanczosContext{CommT,E,A,H1,BondsT,SysConnT,EnvConnT,MST,BetaT,DPT,EnlargeT,SysTensorT,EnvTensorT,H2T,OMT}
     target::Int
     comm::CommT

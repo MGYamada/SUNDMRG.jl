@@ -1,0 +1,6 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+SUNDMRG = "f5f04b14-1ee9-4d01-a958-b95a245b82cc"
+
+[sources]
+SUNDMRG = {path = ".."}
