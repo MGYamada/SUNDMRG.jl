@@ -349,7 +349,7 @@ function _run_growth_inner_step!(state::_FiniteState{Nc}, i, L, sys_blocks, sys_
 end
 
 function _growth_phase!(state::_FiniteState{Nc}, config::_FiniteRunConfig, runtime::_FiniteRuntime) where Nc
-    (; Ly, N, verbose) = config
+    (; Ly, N, m_warmup, verbose) = config
     (; mirror) = runtime
 
     L = 2state.blockL.length
