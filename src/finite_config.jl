@@ -1,7 +1,7 @@
 const _DMRGSchedule = Tuple{Int, Float64}
 
-struct _FiniteRunConfig{L,T,S,C,A}
-    lattice::L
+struct _FiniteRunConfig{L,T,F,S,C,A}
+    lattice::Val{L}
     Lx::Int
     Ly::Int
     N::Int
@@ -12,7 +12,7 @@ struct _FiniteRunConfig{L,T,S,C,A}
     target::Int
     widthmax::Int
     tables::T
-    fileio::Bool
+    fileio::Val{F}
     scratch::S
     ES_max::Float64
     tol_energy::Float64

@@ -68,19 +68,16 @@
 end
 
 @testset "DMRG step result" begin
-    step = SUNDMRG.DMRGStepResult(1, 2, 3, 4.0, 5.0, 6, 7, 8.0, 9, 10, nothing, nothing, nothing, nothing)
+    step = SUNDMRG.DMRGStepResult(1, 2, 3, 4.0, 5.0, 6, 7, 8.0, 9, 10)
     @test step.block == 1
     @test step.es == 9
     @test step.Sj == 10
-    @test step.env_block === nothing
-    @test step.env_tensor_dict === nothing
-    @test step.env_block_enl === nothing
-    @test step.env_trmat === nothing
+    @test step isa SUNDMRG.DMRGStepResult
 
-    env_step = SUNDMRG.DMRGStepResult(1, 2, 3, 4.0, 5.0, 6, 7, 8.0, 9, nothing, 10, 11, 12, 13)
+    env_step = SUNDMRG.DMRGStepResultWithEnv(1, 2, 3, 4.0, 5.0, 6, 7, 8.0, 9, 10, 11, 12, 13)
     @test env_step.block == 1
     @test env_step.es == 9
-    @test env_step.Sj === nothing
+    @test env_step isa SUNDMRG.DMRGStepResultWithEnv
     @test env_step.env_block == 10
     @test env_step.env_tensor_dict == 11
     @test env_step.env_block_enl == 12

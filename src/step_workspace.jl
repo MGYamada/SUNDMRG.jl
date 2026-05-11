@@ -6,7 +6,7 @@ function _build_block_enlarging(Nc, αs, βs, dp, αβmatrix, cum_mαβ, adjoint
         if haskey(dp[j], βs[i])
             for ki in findall(αβmatrix[:, i]), kj in findall(αβmatrix[:, j])
                 if haskey(dp2[kj], αs[ki])
-                    matrix = on_the_fly ? on_the_fly_calc1(Nc, (αs[kj], βs[j], αs[ki], βs[i])) : tables[1][αs[kj], βs[j], αs[ki], βs[i]]
+                    matrix = _on_the_fly(on_the_fly) ? on_the_fly_calc1(Nc, (αs[kj], βs[j], αs[ki], βs[i])) : tables[1][αs[kj], βs[j], αs[ki], βs[i]]
                     for τ1 in 1 : size(matrix, 2), τ2 in 1 : size(matrix, 1)
                         push!(enlarging, BlockEnlarging(matrix[τ2, τ1], τ1, τ2, cum_mαβ[ki, i] + 1 : cum_mαβ[ki + 1, i], cum_mαβ[kj, j] + 1 : cum_mαβ[kj + 1, j], i, j, ki, kj))
                     end
@@ -22,6 +22,10 @@ function _empty_tensor_hold(engine)
 end
 
 function _broadcast_tensor_holds(tensor_dict, mβ_list, conn, held_sites, comm, rank, engine; to_engine = false)
+    _broadcast_tensor_holds(tensor_dict, mβ_list, conn, held_sites, comm, rank, engine, Val(to_engine))
+end
+
+function _broadcast_tensor_holds(tensor_dict, mβ_list, conn, held_sites, comm, rank, engine, ::Val{to_engine}) where to_engine
     tensor_dict_hold = _empty_tensor_hold(engine)
 
     if rank == 0
@@ -52,11 +56,7 @@ function _broadcast_tensor_holds(tensor_dict, mβ_list, conn, held_sites, comm, 
             end
 
             if site ∈ held_sites
-                if to_engine
-                    tensor_dict_hold[site] = [to_engine_array.(Ref(engine), Sold[i, j]) for i in 1 : len, j in 1 : len]
-                else
-                    tensor_dict_hold[site] = Sold
-                end
+                tensor_dict_hold[site] = _tensor_hold_value(engine, Sold, len, Val(to_engine))
             end
         end
     end
@@ -64,15 +64,18 @@ function _broadcast_tensor_holds(tensor_dict, mβ_list, conn, held_sites, comm, 
     tensor_dict_hold
 end
 
+_tensor_hold_value(engine, tensor, len, ::Val{false}) = tensor
+_tensor_hold_value(engine, tensor, len, ::Val{true}) = [to_engine_array.(Ref(engine), tensor[i, j]) for i in 1 : len, j in 1 : len]
+
 function _step_bonds(sys_length, env_length, Ly, lattice)
     superblock_bonds = [(y, y) for y in 1 : min(sys_length, env_length, Ly)]
     x_conn = (x -> x <= Ly ? x : 2Ly + 1 - x)(mod1(sys_length, 2Ly))
     y_conn = (x -> x <= Ly ? x : 2Ly + 1 - x)(mod1(env_length, 2Ly))
 
-    if lattice == :honeycombZC
+    if _is_honeycomb_zc(lattice)
         filter!(z -> z[1] <= min(x_conn, y_conn) ? iseven(z[1]) : isodd(z[1]), superblock_bonds)
     end
-    if (x_conn, y_conn) ∉ superblock_bonds && !(lattice == :honeycombZC && sys_length <= Ly && env_length <= Ly)
+    if (x_conn, y_conn) ∉ superblock_bonds && !(_is_honeycomb_zc(lattice) && sys_length <= Ly && env_length <= Ly)
         push!(superblock_bonds, (x_conn, y_conn))
     end
 
@@ -99,24 +102,21 @@ function _rank_held_bonds(superblock_bonds, Ncpu, rank)
 end
 
 function _build_superblock_h1(sys_enl, env_enl, OM, Ncpu, rank, engine)
-    if engine <: GPUEngine
-        superblock_H1 = SuperBlock1GPU[]
-    else
-        superblock_H1 = SuperBlock1CPU[]
-    end
+    superblock_H1 = _empty_superblock_h1(engine)
 
     for k1 in axes(OM, 1), k2 in axes(OM, 2)
         if OM[k1, k2] > 0 && (k1 + k2 - 2) % Ncpu == rank
-            if engine <: GPUEngine
-                push!(superblock_H1, SuperBlock1GPU(sys_enl.scalar_dict[:H][k1], env_enl.scalar_dict[:H][k2], k1, k2))
-            else
-                push!(superblock_H1, SuperBlock1CPU(sys_enl.scalar_dict[:H][k1], env_enl.scalar_dict[:H][k2], k1, k2))
-            end
+            _push_superblock_h1!(superblock_H1, engine, sys_enl.scalar_dict[:H][k1], env_enl.scalar_dict[:H][k2], k1, k2)
         end
     end
 
     return superblock_H1
 end
+
+_empty_superblock_h1(::Type{<:CPUEngine}) = SuperBlock1CPU[]
+_empty_superblock_h1(::Type{<:GPUEngine}) = SuperBlock1GPU[]
+_push_superblock_h1!(superblock_H1, ::Type{<:CPUEngine}, sys_H, env_H, k1, k2) = push!(superblock_H1, SuperBlock1CPU(sys_H, env_H, k1, k2))
+_push_superblock_h1!(superblock_H1, ::Type{<:GPUEngine}, sys_H, env_H, k1, k2) = push!(superblock_H1, SuperBlock1GPU(sys_H, env_H, k1, k2))
 
 function _build_superblock_h2(Nc, sys_βs, env_βs, sys_ms, env_ms, sys_dp, env_dp, OM, γirrep, signfactor, tables, on_the_fly)
     fac = sqrt(Nc ^ 2 - 1) * signfactor
@@ -129,7 +129,7 @@ function _build_superblock_h2(Nc, sys_βs, env_βs, sys_ms, env_ms, sys_dp, env_
                 if haskey(sys_dp[k1], sys_βs[k3])
                     for k4 in eachindex(env_βs)
                         if haskey(env_dp[k2], env_βs[k4]) && OM[k3, k4] > 0
-                            ctensor = on_the_fly ? on_the_fly_calc4(Nc, (sys_βs[k1], env_βs[k2], γirrep, sys_βs[k3], env_βs[k4])) : tables[4][sys_βs[k1], env_βs[k2], γirrep, sys_βs[k3], env_βs[k4]]
+                            ctensor = _on_the_fly(on_the_fly) ? on_the_fly_calc4(Nc, (sys_βs[k1], env_βs[k2], γirrep, sys_βs[k3], env_βs[k4])) : tables[4][sys_βs[k1], env_βs[k2], γirrep, sys_βs[k3], env_βs[k4]]
                             for τ1 in 1 : size(ctensor, 1), τ2 in 1 : size(ctensor, 2), om2 in 1 : size(ctensor, 3)
                                 push!(miniblock, MiniBlock(fac * ctensor[τ1, τ2, om2, om1], om2, τ1, τ2, k3, k4))
                             end
@@ -187,37 +187,39 @@ function _prepare_step_workspace(sys, env, sys_tensor_dict, env_tensor_dict, sys
 
     sys_connS = _connection_tensor(sys_enl, x_conn, held_x)
     env_connS = _connection_tensor(env_enl, y_conn, held_y)
-    sys_tensor_dict_hold = _broadcast_tensor_holds(sys_tensor_dict, sys.mβ_list, x_conn, held_x, comm, rank, engine; to_engine = engine <: GPUEngine)
+    sys_tensor_dict_hold = _broadcast_tensor_holds(sys_tensor_dict, sys.mβ_list, x_conn, held_x, comm, rank, engine, _tensor_hold_to_engine(engine))
     env_tensor_dict_hold = _broadcast_tensor_holds(env_tensor_dict, env.mβ_list, y_conn, held_y, comm, rank, engine)
 
     return _StepWorkspace(sys_αs, env_αs, sys_βs, env_βs, sys_ms, env_ms, sys_len, env_len, superblock_bonds, bonds_hold, x_conn, y_conn, sys_dp, env_dp, sys_enlarge, env_enlarge, OM, superblock_H1, superblock_H2, sys_connS, env_connS, sys_tensor_dict_hold, env_tensor_dict_hold)
 end
 
-function _initial_step_wavefunction(Ψ0_guess, env_ms, sys_ms, OM, Ncpu, rank, engine)
-    if !isnothing(Ψ0_guess)
-        return deepcopy(Ψ0_guess)
-    end
+_tensor_hold_to_engine(::Type{<:CPUEngine}) = Val(false)
+_tensor_hold_to_engine(::Type{<:GPUEngine}) = Val(true)
 
-    if engine <: GPUEngine
-        return [[CUDA.rand(Float64, env_ms[ki], sys_ms[kj]) for J in 1 : ((kj + ki - 2) % Ncpu == rank ? OM[kj, ki] : 0)] for ki in eachindex(env_ms), kj in eachindex(sys_ms)]
-    end
-
-    return [[rand(env_ms[ki], sys_ms[kj]) for J in 1 : ((kj + ki - 2) % Ncpu == rank ? OM[kj, ki] : 0)] for ki in eachindex(env_ms), kj in eachindex(sys_ms)]
+function _initial_step_wavefunction(Ψ0_guess::Nothing, env_ms, sys_ms, OM, Ncpu, rank, engine)
+    [[_random_engine_matrix(engine, env_ms[ki], sys_ms[kj]) for J in 1 : ((kj + ki - 2) % Ncpu == rank ? OM[kj, ki] : 0)] for ki in eachindex(env_ms), kj in eachindex(sys_ms)]
 end
+
+function _initial_step_wavefunction(Ψ0_guess, env_ms, sys_ms, OM, Ncpu, rank, engine)
+    deepcopy(Ψ0_guess)
+end
+
+_random_engine_matrix(::Type{<:CPUEngine}, rows, cols) = rand(rows, cols)
+_random_engine_matrix(::Type{<:GPUEngine}, rows, cols) = CUDA.rand(Float64, rows, cols)
 
 function _step_result_buffers(::Val{Nc}, engine) where Nc
     newblock = Block{Nc}[]
-    if engine <: GPUEngine
-        newblock_enl = EnlargedBlockGPU{Nc}[]
-        trmat = Vector{CuMatrix{Float64}}[]
-        newtensor_dict = Dict{Int64, Matrix{Vector{CuMatrix{Float64}}}}[]
-    else
-        newblock_enl = EnlargedBlockCPU{Nc}[]
-        trmat = Vector{Matrix{Float64}}[]
-        newtensor_dict = Dict{Int64, Matrix{Vector{Matrix{Float64}}}}[]
-    end
+    newblock_enl, trmat, newtensor_dict = _step_engine_result_buffers(Val(Nc), engine)
 
     return newblock, newblock_enl, trmat, newtensor_dict
+end
+
+function _step_engine_result_buffers(::Val{Nc}, ::Type{<:CPUEngine}) where Nc
+    EnlargedBlockCPU{Nc}[], Vector{Matrix{Float64}}[], Dict{Int64, Matrix{Vector{Matrix{Float64}}}}[]
+end
+
+function _step_engine_result_buffers(::Val{Nc}, ::Type{<:GPUEngine}) where Nc
+    EnlargedBlockGPU{Nc}[], Vector{CuMatrix{Float64}}[], Dict{Int64, Matrix{Vector{CuMatrix{Float64}}}}[]
 end
 
 function _step_side_context(switch, sys_label, sys_len, env_len, sys_ms, env_ms, sys_βs, env_βs, sys_dp, env_dp, x_conn, y_conn, sys, env, sys_enl, env_enl)

@@ -1,4 +1,5 @@
-_connection_or_tensor(connS, block_enl, conn) = isnothing(connS) ? block_enl.tensor_dict[conn] : connS
+_connection_or_tensor(connS::Nothing, block_enl, conn) = block_enl.tensor_dict[conn]
+_connection_or_tensor(connS, block_enl, conn) = connS
 _held_or_stored_tensor(tensor_dict_hold, tensor_dict, site) = haskey(tensor_dict_hold, site) ? tensor_dict_hold[site] : tensor_dict[site]
 
 function _enlarged_spin_tensor(ms, βs, dp, enlarging, source, engine)
@@ -90,12 +91,19 @@ tensor_dict, Sj = measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, 
 measurement phase
 """
 function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y_conn, sys_connS, env_connS, sys_len, env_len, sys_tensor_dict, env_tensor_dict, sys_tensor_dict_hold, env_tensor_dict_hold, sys_αs, env_αs, sys_βs, env_βs, sys_dp, env_dp, sys_ms, env_ms, sys_enlarge, env_enlarge, superblock_H2, OM, Ψ0, transformation_matrix, comm, rank, Ncpu, engine; correlation = :none, margin = 0, lattice = :square, Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0))
+    _measurement!(_val_mode(correlation), SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y_conn, sys_connS, env_connS, sys_len, env_len, sys_tensor_dict, env_tensor_dict, sys_tensor_dict_hold, env_tensor_dict_hold, sys_αs, env_αs, sys_βs, env_βs, sys_dp, env_dp, sys_ms, env_ms, sys_enlarge, env_enlarge, superblock_H2, OM, Ψ0, transformation_matrix, comm, rank, Ncpu, engine; margin = margin, lattice = lattice, Sj = Sj)
+end
+
+_val_mode(x::Val) = x
+_val_mode(x) = Val(x)
+
+function _measurement!(::Val{correlation}, SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y_conn, sys_connS, env_connS, sys_len, env_len, sys_tensor_dict, env_tensor_dict, sys_tensor_dict_hold, env_tensor_dict_hold, sys_αs, env_αs, sys_βs, env_βs, sys_dp, env_dp, sys_ms, env_ms, sys_enlarge, env_enlarge, superblock_H2, OM, Ψ0, transformation_matrix, comm, rank, Ncpu, engine; margin = 0, lattice = :square, Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0)) where correlation
     tensor_dict = empty_engine_tensor_dict(engine)
     sys_S = nothing
     env_S = nothing
 
     for x in 1 : min(sys_enl.length, Ly)
-        if isroot(rank) && (lattice != :honeycombZC || x == x_conn || ((mod1(sys.length, 2Ly) <= Ly) ? x == 1 : x == Ly) || (x <= x_conn ? iseven(x) : isodd(x)))
+        if isroot(rank) && (!_is_honeycomb_zc(lattice) || x == x_conn || ((mod1(sys.length, 2Ly) <= Ly) ? x == 1 : x == Ly) || (x <= x_conn ? iseven(x) : isodd(x)))
             if x == x_conn
                 Stemp = _connection_or_tensor(sys_connS, sys_enl, x_conn)
             else
@@ -105,7 +113,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
             tensor_dict[x] = _project_spin_tensor(Stemp, transformation_matrix, sys_len, engine)
         end
 
-        if correlation == :nn
+        if _measure_nn_correlation(Val(correlation))
             if x == x_conn
                 if isroot(rank)
                     sys_S = Stemp
@@ -123,7 +131,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
 
                 _store_sisj_bond!(SiSj, bond, sys_S, env_S, superblock_H2, OM, Ψ0, sys_len, env_len, sys_ms, env_ms, comm, rank, Ncpu, engine)
 
-            elseif env_enl.length % Ly == 0 && (lattice != :honeycombZC || (x_conn == 1 ? isodd(x) : iseven(x)))
+            elseif env_enl.length % Ly == 0 && (!_is_honeycomb_zc(lattice) || (x_conn == 1 ? isodd(x) : iseven(x)))
                 if isroot(rank)
                     sys_S = Stemp
                 end
@@ -162,13 +170,13 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
         end
     end
 
-    if correlation == :chain
+    if _measure_chain_correlation(Val(correlation))
         if isroot(rank)
             if !isempty(Sj) && (sys_label == :l && sys.length == 0)
-                Sj2 = engine <: GPUEngine ? [to_engine_array.(Ref(engine), Sj[i, j]) for i in 1 : length(env_αs), j in 1 : length(env_αs)] : Sj
+                Sj2 = engine_tensor_from_host(engine, Sj, length(env_αs))
                 env_S = _enlarged_spin_tensor(env_ms, env_βs, env_dp, env_enlarge, Sj2, engine)
             elseif !isempty(Sj)
-                Sj2 = engine <: GPUEngine ? [to_engine_array.(Ref(engine), Sj[i, j]) for i in 1 : length(sys_αs), j in 1 : length(sys_αs)] : Sj
+                Sj2 = engine_tensor_from_host(engine, Sj, length(sys_αs))
                 sys_S = _enlarged_spin_tensor(sys_ms, sys_βs, sys_dp, sys_enlarge, Sj2, engine)
             elseif x_conn == 1 && sys.length ÷ Ly == margin
                 sys_S = _connection_or_tensor(sys_connS, sys_enl, x_conn)
@@ -183,7 +191,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                 if isroot(rank)
                     sys_S = _connection_or_tensor(sys_connS, sys_enl, x_conn)
                 end
-            elseif y_conn == 1 || (lattice == :honeycombZC && y_conn <= 2)
+            elseif y_conn == 1 || (_is_honeycomb_zc(lattice) && y_conn <= 2)
                 N = sys_enl.length + env_enl.length
                 bond = (env_enl.length, iseven(margin) ? N - margin * Ly : N - (margin + 1) * Ly + 1)
 
@@ -192,7 +200,7 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
                 end
             end
 
-            if (sys_label == :l && sys.length == 0) || y_conn == 1 || (lattice == :honeycombZC && y_conn <= 2)
+            if (sys_label == :l && sys.length == 0) || y_conn == 1 || (_is_honeycomb_zc(lattice) && y_conn <= 2)
                 _store_sisj_bond!(SiSj, bond, sys_S, env_S, superblock_H2, OM, Ψ0, sys_len, env_len, sys_ms, env_ms, comm, rank, Ncpu, engine)
             end
 
@@ -206,3 +214,8 @@ function measurement!(SiSj, sys_label, sys, env, sys_enl, env_enl, Ly, x_conn, y
 
     tensor_dict, Sj
 end
+
+_measure_nn_correlation(::Val{:nn}) = true
+_measure_nn_correlation(mode) = false
+_measure_chain_correlation(::Val{:chain}) = true
+_measure_chain_correlation(mode) = false

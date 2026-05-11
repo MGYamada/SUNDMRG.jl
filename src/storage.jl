@@ -1,5 +1,8 @@
 abstract type AbstractInternalStorage end
 
+const _HostTrmat = Vector{Matrix{Float64}}
+const _HostTensor = Matrix{Vector{Matrix{Float64}}}
+
 struct MemoryInternalStorage{B, T, TT} <: AbstractInternalStorage
     block_table::B
     trmat_table::T
@@ -8,19 +11,23 @@ end
 
 struct JLD2InternalStorage <: AbstractInternalStorage
     scratch::String
-    dirid
+    dirid::String
 end
 
 _storage_dir(storage::JLD2InternalStorage) = joinpath(storage.scratch, "temp$(storage.dirid)")
 
-function init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
-    if fileio
-        dirid = rank == 0 ? lpad(rand(0 : 99999), 5, "0") : 0
-        if rank == 0
-            mkdir(joinpath(scratch, "temp$dirid"))
-        end
-        return JLD2InternalStorage(scratch, dirid)
+init_internal_storage(fileio::Bool, scratch, block_table, trmat_table, tensor_table, rank) =
+    init_internal_storage(Val(fileio), scratch, block_table, trmat_table, tensor_table, rank)
+
+function init_internal_storage(::Val{true}, scratch, block_table, trmat_table, tensor_table, rank)
+    dirid = rank == 0 ? lpad(rand(0 : 99999), 5, "0") : "00000"
+    if rank == 0
+        mkdir(joinpath(scratch, "temp$dirid"))
     end
+    return JLD2InternalStorage(scratch, dirid)
+end
+
+function init_internal_storage(::Val{false}, scratch, block_table, trmat_table, tensor_table, rank)
     return MemoryInternalStorage(block_table, trmat_table, tensor_table)
 end
 
@@ -48,6 +55,12 @@ function load_tensor(storage::MemoryInternalStorage, label, len, y)
     pop!(storage.tensor_table, (label, len, y), nothing)
 end
 
+has_tensor(storage::MemoryInternalStorage, label, len, y) = haskey(storage.tensor_table, (label, len, y))
+
+function take_tensor!(storage::MemoryInternalStorage, label, len, y)
+    pop!(storage.tensor_table, (label, len, y))::_HostTensor
+end
+
 function save_tensor(storage::MemoryInternalStorage, label, len, y, tensor)
     storage.tensor_table[label, len, y] = tensor
 end
@@ -61,7 +74,7 @@ function save_block(storage::JLD2InternalStorage, label, len, block)
 end
 
 function load_trmat(storage::JLD2InternalStorage, label, len)
-    load_object(_trmat_filename(storage, label, len))::Vector{Matrix{Float64}}
+    load_object(_trmat_filename(storage, label, len))::_HostTrmat
 end
 
 function save_trmat(storage::JLD2InternalStorage, label, len, trmat)
@@ -87,12 +100,21 @@ end
 function load_tensor(storage::JLD2InternalStorage, label, len, y)
     filename = _tensor_filename(storage, label, len, y)
     if isfile(filename)
-        tensor = load_object(filename)::Matrix{Vector{Matrix{Float64}}}
+        tensor = load_object(filename)::_HostTensor
         rm(filename)
         tensor
     else
         nothing
     end
+end
+
+has_tensor(storage::JLD2InternalStorage, label, len, y) = isfile(_tensor_filename(storage, label, len, y))
+
+function take_tensor!(storage::JLD2InternalStorage, label, len, y)
+    filename = _tensor_filename(storage, label, len, y)
+    tensor = load_object(filename)::_HostTensor
+    rm(filename)
+    return tensor
 end
 
 function save_tensor(storage::JLD2InternalStorage, label, len, y, tensor)

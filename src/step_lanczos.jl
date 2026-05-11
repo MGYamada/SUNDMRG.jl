@@ -20,9 +20,7 @@ function Lanczos_kernel!(Ψout, Ψin, x, y, sys_S, env_S, superblock_H2, OM, sys
         else
             temp3 = engine_matrix_type(engine)(undef, s.env_in_size, s.sys_in_size)
         end
-        if engine <: GPUEngine
-            CUDA.synchronize()
-        end
+        synchronize_engine(engine)
         MPI.Bcast!(temp3, root1, comm)
 
         if (x, y) != (0, 0)
@@ -36,9 +34,7 @@ function Lanczos_kernel!(Ψout, Ψin, x, y, sys_S, env_S, superblock_H2, OM, sys
     for ki in 1 : env_len, kj in 1 : sys_len
         for om in 1 : OM[kj, ki]
             root2 = (kj + ki - 2) % Ncpu
-            if engine <: GPUEngine
-                CUDA.synchronize()
-            end
+            synchronize_engine(engine)
             MPI.Reduce!(Ψtemp[ki, kj][om], MPI.SUM, root2, comm)
             if rank == root2
                 Ψout[ki, kj][om] .+= Ψtemp[ki, kj][om]
@@ -97,11 +93,9 @@ function _step_energy(E, time_Lanczos, sys_enl, env_enl, superblock_bonds, comm,
     return 0.0
 end
 
-function _report_overlap(Ψ0_guess, Ψ0, comm, rank, noisy)
-    if isnothing(Ψ0_guess)
-        return nothing
-    end
+_report_overlap(Ψ0_guess::Nothing, Ψ0, comm, rank, noisy) = nothing
 
+function _report_overlap(Ψ0_guess, Ψ0, comm, rank, noisy)
     nume = MPI.Reduce(mydot(Ψ0_guess, Ψ0), MPI.SUM, 0, comm)
     den1 = MPI.Reduce(mydot(Ψ0_guess, Ψ0_guess), MPI.SUM, 0, comm)
     den2 = MPI.Reduce(mydot(Ψ0, Ψ0), MPI.SUM, 0, comm)
