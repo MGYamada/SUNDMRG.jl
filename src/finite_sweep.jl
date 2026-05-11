@@ -51,18 +51,22 @@ function _init_sweep_state(Ψ, sys_blocks, sys_tensor_dicts, sys_trmats, sys_blo
     )
 end
 
-function _reverse_sweep_end!(state::_SweepState, Ψ0_guess, config::_FiniteRunConfig, runtime::_FiniteRuntime)
+function _swap_sweep_sides!(state::_SweepState)
+    state.sys_block, state.env_block = state.env_block, state.sys_block
+    state.sys_tensor_dict, state.env_tensor_dict = state.env_tensor_dict, state.sys_tensor_dict
+    state.sys_trmat, state.env_trmat = state.env_trmat, state.sys_trmat
+    state.sys_block_enl, state.env_block_enl = state.env_block_enl, state.sys_block_enl
+    state.sys_label, state.env_label = state.env_label, state.sys_label
+    return state
+end
+
+function _swap_if_env_exhausted!(state::_SweepState, Ψ0_guess, config::_FiniteRunConfig, runtime::_FiniteRuntime)
     (; widthmax, tables) = config
     (; comm, rank, Ncpu, on_the_fly, γ_list, engine) = runtime
 
     if state.env_block.length == 0
         Ψ0_guess = wavefunction_reverse(Ψ0_guess, state.sys_label, state.sys_block_enl, state.env_block_enl, widthmax, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine)
-
-        state.sys_block, state.env_block = state.env_block, state.sys_block
-        state.sys_tensor_dict, state.env_tensor_dict = state.env_tensor_dict, state.sys_tensor_dict
-        state.sys_trmat, state.env_trmat = state.env_trmat, state.sys_trmat
-        state.sys_block_enl, state.env_block_enl = state.env_block_enl, state.sys_block_enl
-        state.sys_label, state.env_label = state.env_label, state.sys_label
+        _swap_sweep_sides!(state)
     end
 
     return Ψ0_guess
@@ -75,7 +79,7 @@ function _sweep_step!(SiSj, state::_SweepState, EE, storage, L, m, measurement, 
     Ψ0_guess = eig_prediction(state.Ψ0, state.sys_label, state.sys_block_enl, state.env_block_enl, state.sys_trmat, state.env_trmat, widthmax, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine)
 
     state.env_block, state.env_tensor_dict, state.env_trmat, state.env_block_enl = _load_sweep_env(storage, state.env_label, L - state.sys_block.length - 2, config, runtime, Val(Nc))
-    Ψ0_guess = _reverse_sweep_end!(state, Ψ0_guess, config, runtime)
+    Ψ0_guess = _swap_if_env_exhausted!(state, Ψ0_guess, config, runtime)
 
     if verbose
         root_println(runtime, graphic(state.sys_block, state.env_block; sys_label = state.sys_label))
@@ -118,5 +122,5 @@ function _update_measurement_flag(measurement, energies, EEs, config::_FiniteRun
         return MPI.bcast(measurement, 0, comm)::Bool
     end
 
-    MPI.bcast(nothing, 0, comm)::Bool
+    return MPI.bcast(nothing, 0, comm)::Bool
 end

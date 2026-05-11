@@ -2,12 +2,20 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
     correlation ∈ (:none, :nn, :chain) || throw(ArgumentError("correlation must be :none, :nn, or :chain"))
     alg ∈ (:slow, :fast) || throw(ArgumentError("alg must be :slow or :fast"))
 
-    did_init = false
+    did_init = Ref(false)
     runtime_initialized = false
     runtime_finalized = Ref(false)
     rank = 0
     if manage_mpi
-        did_init = init_DMRG!()
+        was_initialized = MPI.Initialized()
+        try
+            did_init[] = init_DMRG!()
+        catch
+            if !was_initialized && MPI.Initialized() && !MPI.Finalized()
+                finalize_DMRG!()
+            end
+            rethrow()
+        end
     elseif !MPI.Initialized() || MPI.Finalized()
         throw(ArgumentError("MPI must be initialized before run_DMRG(...; manage_mpi = false)"))
     end
@@ -24,7 +32,7 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
         if runtime_initialized && !runtime_finalized[]
             _finalize_runtime!(engine, nothing, rank)
         end
-        if manage_mpi && did_init
+        if manage_mpi && did_init[]
             finalize_DMRG!()
         end
     end

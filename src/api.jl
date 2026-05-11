@@ -30,6 +30,7 @@ end
 
 function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup::Union{Int, Tuple{Int, Float64}}, m_sweep_list::AbstractVector, m_cooldown::Union{Int, Tuple{Int, Float64}}, engine::Type{<:Engine}; kwargs...) where Nc
     if lat.BC == :ZC
-        _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
+        return _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
     end
+    throw(ArgumentError("HoneycombLattice with BC=$(lat.BC) is not supported (only :ZC)"))
 end

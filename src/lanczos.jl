@@ -58,6 +58,15 @@ function mycopyto!(dest::MyMatrix, src::MyMatrix)
     dest
 end
 
+function myzero!(A::MyMatrix)
+    for I in eachindex(A)
+        for J in eachindex(A[I])
+            A[I][J] .= 0.0
+        end
+    end
+    A
+end
+
 """
 CG!(A!, val, x, Ax, buffer1, buffer2, comm, rank)
 CG routine for the Lanczos method
@@ -74,6 +83,7 @@ function CG!(A!::Function, val, x, Ax, buffer1, buffer2, comm, rank)
         normold = MPI.Allreduce(mydot(r, r), MPI.SUM, comm)
         j = 1
         while true
+            myzero!(Ap)
             A!(Ap, p)
             myaxpy!(-valshift, p, Ap)
             α = normold / MPI.Allreduce(mydot(p, Ap), MPI.SUM, comm)
@@ -89,6 +99,7 @@ function CG!(A!::Function, val, x, Ax, buffer1, buffer2, comm, rank)
             j += 1
         end
         myrdiv!(x, sqrt(MPI.Allreduce(mydot(x, x), MPI.SUM, comm)))
+        myzero!(r)
         A!(r, x)
         valnew = MPI.Allreduce(mydot(x, r), MPI.SUM, comm)
         if abs((valnew - val) / valnew) < tol_wavefunction
@@ -124,6 +135,7 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine, mode::Val
     cache = _init_lanczos_cache(mode, ketk)
     k = 1
     while true
+        myzero!(ketk1)
         A!(ketk1, ketk)
         α = MPI.Allreduce(mydot(ketk, ketk1), MPI.SUM, comm)
         push!(αlist, α)
@@ -159,12 +171,7 @@ end
 
 function _zero_lanczos_vector(initial)
     ket = deepcopy(initial)
-    for I in eachindex(ket)
-        for J in eachindex(ket[I])
-            ket[I][J] .= 0.0
-        end
-    end
-    return ket
+    return myzero!(ket)
 end
 
 function _lanczos_ritz_vectors(αlist, βlist, comm, rank)
@@ -181,11 +188,7 @@ _lanczos_eigenvalue_converged(val, vold) = abs(val - vold) < tol_Lanczos * max(a
 _lanczos_wavefunction_converged(val, target_val, var) = abs(val - target_val) < tol_wavefunction * max(abs(val), 1.0) && abs(var - val ^ 2) < tol_wavefunction * max(abs(val ^ 2), 1.0)
 
 function _reconstruct_lanczos_vector!(mode::Val, A!, engine, initial, ketk, ketk1, ketkm1, vecs, αlist, βlist, position, cache)
-    for I in eachindex(ketkm1)
-        for J in eachindex(ketkm1[I])
-            ketkm1[I][J] .= 0.0
-        end
-    end
+    myzero!(ketkm1)
     mycopyto!(ketk, initial)
     β = 0.0
     position = min(position, size(vecs, 2))
@@ -198,6 +201,7 @@ end
 
 function _refine_lanczos_vector!(A!, initial, ketk, ketkm1, ketk1, target_val, comm, rank)
     myrdiv!(initial, sqrt(MPI.Allreduce(mydot(initial, initial), MPI.SUM, comm)))
+    myzero!(ketk)
     A!(ketk, initial)
     val = MPI.Allreduce(mydot(initial, ketk), MPI.SUM, comm)
     var = MPI.Allreduce(mydot(ketk, ketk), MPI.SUM, comm)
@@ -222,6 +226,7 @@ function _cache_lanczos_vector!(::Val{:fast}, cache, ketk)
 end
 
 function _lanczos_reconstruct_step!(::Val{:slow}, A!, engine, coeff, cache, initial, ketk, ketk1, ketkm1, αlist, βlist, k, β)
+    myzero!(ketk1)
     A!(ketk1, ketk)
     α = αlist[k]
     myaxpy!(-β, ketkm1, ketk1)

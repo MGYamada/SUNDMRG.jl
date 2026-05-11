@@ -1,4 +1,7 @@
 using LinearAlgebra
+using MPI
+
+MPI.Initialized() || MPI.Init()
 
 @testset "Lanczos nested-array helper kernels" begin
     function nested_fixture(offset::Float64)
@@ -39,4 +42,23 @@ using LinearAlgebra
     # Copy must be value-based, not aliasing source storage.
     x[1, 1][1][1, 1] = -999.0
     @test dest[1, 1][1][1, 1] != x[1, 1][1][1, 1]
+
+    SUNDMRG.myzero!(dest)
+    for I in eachindex(dest), J in eachindex(dest[I])
+        @test iszero(dest[I][J])
+    end
+end
+
+@testset "Lanczos clears output before applying accumulating operator" begin
+    H = Diagonal([1.0, 2.0])
+    initial = Matrix{Vector{Matrix{Float64}}}(undef, 1, 1)
+    initial[1, 1] = [reshape([1.0, 1.0], 2, 1)]
+
+    function accumulating_A!(out, input)
+        out[1, 1][1] .+= H * input[1, 1][1]
+        return out
+    end
+
+    val = SUNDMRG.Lanczos!(accumulating_A!, initial, 1, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 4, alg = :slow)
+    @test val ≈ 1.0 atol = 1e-12
 end
