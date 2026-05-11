@@ -54,11 +54,12 @@ function _init_state(config::_FiniteRunConfig, runtime::_FiniteRuntime)
     (; lattice, Lx, Ly, Nc, target, m_warmup, widthmax, tables, fileio, scratch, verbose) = config
     (; engine, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor) = runtime
 
+    storage = nothing
     m_list = Tuple{Int, Float64}[]
     errors = Float64[]
     energies = Float64[]
     EEs = Float64[]
-    EE = Vector{Float64}(undef, Lx - 1)
+    EE = fill(NaN, Lx - 1)
     ES = Dict{SUNIrrep{Nc}, Vector{Float64}}()
     SiSj = Dict{Tuple{Int, Int}, Float64}()
 
@@ -66,42 +67,49 @@ function _init_state(config::_FiniteRunConfig, runtime::_FiniteRuntime)
     tensor_table = Dict{Tuple{Symbol, Int, Int}, Matrix{Vector{Matrix{Float64}}}}()
     trmat_table = Dict{Tuple{Symbol, Int}, Vector{Matrix{Float64}}}()
 
-    if isroot(runtime)
-        storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR =
-            _init_root_state_edges(config, runtime, block_table, trmat_table, tensor_table, Val(Nc))
-    else
-        storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR =
-            _init_worker_state_edges(config, runtime, block_table, trmat_table, tensor_table, Val(Nc))
+    try
+        if isroot(runtime)
+            storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR =
+                _init_root_state_edges(config, runtime, block_table, trmat_table, tensor_table, Val(Nc))
+        else
+            storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR =
+                _init_worker_state_edges(config, runtime, block_table, trmat_table, tensor_table, Val(Nc))
+        end
+
+        blockL_enl = enlarge_block(blockL, blockL_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
+        if !mirror
+            blockR_enl = enlarge_block(blockR, blockR_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
+        else
+            blockR_enl = blockL_enl
+        end
+
+        Ψ = empty_engine_tensor_matrices(engine, mirror ? 1 : 2)
+
+        return _FiniteState{Nc,typeof(storage),typeof(blockL),typeof(blockL_tensor_dict),typeof(blockR),typeof(blockR_tensor_dict),typeof(blockL_enl),typeof(blockR_enl),typeof(trmatL),typeof(trmatR),typeof(Ψ)}(
+            m_list,
+            errors,
+            energies,
+            EEs,
+            EE,
+            ES,
+            SiSj,
+            storage,
+            blockL,
+            blockL_tensor_dict,
+            blockR,
+            blockR_tensor_dict,
+            blockL_enl,
+            blockR_enl,
+            trmatL,
+            trmatR,
+            Ψ,
+        )
+    catch
+        if storage !== nothing && isroot(runtime)
+            cleanup_storage!(storage)
+        end
+        rethrow()
     end
-
-    blockL_enl = enlarge_block(blockL, blockL_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
-    if !mirror
-        blockR_enl = enlarge_block(blockR, blockR_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
-    else
-        blockR_enl = blockL_enl
-    end
-
-    Ψ = empty_engine_tensor_matrices(engine, mirror ? 1 : 2)
-
-    return _FiniteState{Nc,typeof(storage),typeof(blockL),typeof(blockL_tensor_dict),typeof(blockR),typeof(blockR_tensor_dict),typeof(blockL_enl),typeof(blockR_enl),typeof(trmatL),typeof(trmatR),typeof(Ψ)}(
-        m_list,
-        errors,
-        energies,
-        EEs,
-        EE,
-        ES,
-        SiSj,
-        storage,
-        blockL,
-        blockL_tensor_dict,
-        blockR,
-        blockR_tensor_dict,
-        blockL_enl,
-        blockR_enl,
-        trmatL,
-        trmatR,
-        Ψ,
-    )
 end
 
 function _init_root_state_edges(config::_FiniteRunConfig, runtime::_FiniteRuntime, block_table, trmat_table, tensor_table, ::Val{Nc}) where Nc
@@ -224,6 +232,7 @@ function _growth_phase!(state::_FiniteState{Nc}, config::_FiniteRunConfig, runti
     end
 
     while L < N
+        record_result = nothing
         if sys_block_enls[1].length % Ly == 0
             if verbose && isroot(runtime)
                 if mirror
@@ -243,6 +252,7 @@ function _growth_phase!(state::_FiniteState{Nc}, config::_FiniteRunConfig, runti
                 sys_blocks[2], sys_tensor_dicts[2], sys_block_enls[2], sys_trmats[2] = result.env_block, result.env_tensor_dict, result.env_block_enl, result.env_trmat
                 state.Ψ[2] = wavefunction_reverse(state.Ψ[1], :l, sys_blocks[1], sys_blocks[2], widthmax, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine)
             end
+            record_result = result
 
             _log_phase_result(runtime, verbose, result.energy, L, result.ee)
         else
@@ -286,13 +296,16 @@ function _growth_phase!(state::_FiniteState{Nc}, config::_FiniteRunConfig, runti
 
                 result = dmrg_step_result!(state.SiSj, sys_label, sys_blocks[i], env_block, sys_tensor_dicts[i], env_tensor_dict, sys_block_enls[i], env_block_enls[i], Ly, m_warmup..., widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, Val(false); Ψ0_guess = Ψ0_guess, lattice = lattice, alg = alg, noisy = verbose && i == 1)
                 sys_blocks[i], sys_tensor_dicts[i], sys_block_enls[i], state.Ψ[i], sys_trmats[i] = result.block, result.tensor_dict, result.block_enl, result.Ψ, result.trmat
+                if i == 1
+                    record_result = result
+                end
 
                 _log_phase_result(runtime, verbose && i == 1, result.energy, L, result.ee)
             end
         end
 
         if L == N
-            state.ES = _record_step_result!(state.m_list, state.errors, state.energies, state.EEs, m_warmup, result)
+            state.ES = _record_step_result!(state.m_list, state.errors, state.energies, state.EEs, m_warmup, record_result)
         end
 
         _save_edge_blocks!(state.storage, mirror, sys_blocks[1], sys_trmats[1], sys_blocks[end], sys_trmats[end], runtime)

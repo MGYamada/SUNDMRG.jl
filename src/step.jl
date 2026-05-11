@@ -3,7 +3,38 @@
 
 A single DMRG step, returned as a `DMRGStepResult` with explicit fields.
 """
-function dmrg_step!(SiSj, sys_label, sys::Block{Nc}, env::Block{Nc}, sys_tensor_dict, env_tensor_dict, sys_enl::EnlargedBlock{Nc}, env_enl::EnlargedBlock{Nc}, Ly, m, α, widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, ::Val{env_calc}; Ψ0_guess = nothing, ES_max = -Inf, correlation = :none, margin = 0, lattice = :square, Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0), alg = :slow, noisy = true) where {Nc, env_calc}
+function dmrg_step!(
+    SiSj,
+    sys_label,
+    sys::Block{Nc},
+    env::Block{Nc},
+    sys_tensor_dict,
+    env_tensor_dict,
+    sys_enl::EnlargedBlock{Nc},
+    env_enl::EnlargedBlock{Nc},
+    Ly,
+    m,
+    α,
+    widthmax,
+    target,
+    signfactor,
+    comm,
+    rank,
+    Ncpu,
+    tables,
+    on_the_fly,
+    γ_list,
+    engine,
+    ::Val{env_calc};
+    Ψ0_guess = nothing,
+    ES_max = -Inf,
+    correlation = :none,
+    margin = 0,
+    lattice = :square,
+    Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0),
+    alg = :slow,
+    noisy = true,
+) where {Nc, env_calc}
     workspace = _prepare_step_workspace(sys, env, sys_tensor_dict, env_tensor_dict, sys_enl, env_enl, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, lattice, Val(Nc))
     (; sys_αs, env_αs, sys_βs, env_βs, sys_ms, env_ms, sys_len, env_len, superblock_bonds, bonds_hold, x_conn, y_conn, sys_dp, env_dp, sys_enlarge, env_enlarge, OM, superblock_H1, superblock_H2, sys_connS, env_connS, sys_tensor_dict_hold, env_tensor_dict_hold) = workspace
 
