@@ -18,6 +18,15 @@ _on_the_fly(on_the_fly) = _mode_value(on_the_fly)
 _is_honeycomb_zc(lattice) = _lattice_name(lattice) == :honeycombZC
 _is_square_lattice(lattice) = _lattice_name(lattice) == :square
 
+"""
+    init_DMRG!()
+
+Initialize MPI for one or more DMRG runs.
+
+Returns `true` when this call initialized MPI and `false` when MPI was already
+initialized. Pair with [`finalize_DMRG!`](@ref) when calling [`run_DMRG`](@ref)
+with `manage_mpi = false`.
+"""
 function init_DMRG!()
     if MPI.Finalized()
         throw(ArgumentError("MPI has already been finalized and cannot be initialized again in this process"))
@@ -29,6 +38,13 @@ function init_DMRG!()
     return false
 end
 
+"""
+    finalize_DMRG!()
+
+Finalize MPI if it is currently initialized.
+
+Returns `true` when MPI was finalized and `false` otherwise.
+"""
 function finalize_DMRG!()
     if MPI.Initialized() && !MPI.Finalized()
         MPI.Finalize()

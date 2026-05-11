@@ -23,25 +23,59 @@ struct DMRGOutput{Nc}
 end
 
 abstract type Model end
+
+"""
+    HeisenbergModel()
+
+Nearest-neighbor Heisenberg model marker used together with an SU symmetry,
+for example `SU(2)HeisenbergModel()`.
+"""
 struct HeisenbergModel <: Model end
 
 abstract type Symmetry end
+
+"""
+    SU(Nc)
+
+Construct an SU(Nc) symmetry marker.
+
+Use it by multiplying with a model marker, either explicitly as
+`SU(3) * HeisenbergModel()` or with Julia's juxtaposition syntax:
+`SU(3)HeisenbergModel()`.
+"""
 struct SU{Nc} <: Symmetry end
 SU(Nc) = SU{Nc}()
 
 abstract type SymmetricModel{S, M} <: Model where {S <: Symmetry, M <: Model} end
 
+"""
+    SU(Nc)HeisenbergModel()
+
+SU(Nc)-symmetric Heisenberg model marker accepted by [`run_DMRG`](@ref).
+"""
 struct HeisenbergModelSU{Nc} <: SymmetricModel{SU{Nc}, HeisenbergModel} end
 
 Base.:*(::SU{Nc}, ::HeisenbergModel) where Nc = HeisenbergModelSU{Nc}()
 
 abstract type Lattice{D} end
 
+"""
+    SquareLattice(Lx, Ly)
+
+Two-dimensional square lattice with `Lx` columns and `Ly` legs.
+"""
 struct SquareLattice <: Lattice{2}
     Lx::Int
     Ly::Int
 end
 
+"""
+    HoneycombLattice(Lx, Ly, :ZC)
+
+Two-dimensional honeycomb cylinder with zigzag-cylinder boundary condition.
+
+`Ly` must be even. `:ZC` is currently the only supported boundary condition.
+"""
 struct HoneycombLattice <: Lattice{2}
     Lx::Int
     Ly::Int
@@ -54,5 +88,17 @@ struct HoneycombLattice <: Lattice{2}
 end
 
 abstract type Engine end
+
+"""
+    CPUEngine
+
+Execution backend that stores dense arrays on the CPU.
+"""
 abstract type CPUEngine <: Engine end
+
+"""
+    GPUEngine
+
+Execution backend that stores dense arrays on CUDA devices.
+"""
 abstract type GPUEngine <: Engine end

@@ -11,8 +11,11 @@ makedocs(;
     pages = [
         "Home" => "index.md",
         "DMRG Overview" => "dmrg_overview.md",
+        "Usage" => "usage.md",
+        "Examples" => "examples.md",
         "SU(Nc) Representation Theory" => "representation_theory.md",
         "Examples of SU(Nc) Representations" => "su_n_examples.md",
         "Representation Labels in SUNDMRG.jl" => "representation_notation.md",
+        "API Reference" => "api.md",
     ],
 )
