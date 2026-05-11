@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.5.1 - 2026-05-11
+
+### Changed
+
+- Bumped package version to v1.5.1.
+- Added GitHub Actions CI for tests and documentation builds.
+- Added usage, examples, and API reference documentation pages.
+- Added docstrings for the main public model, lattice, engine, MPI lifecycle, and table-generation APIs.
+
 ## v1.5.0 - 2026-05-11
 
 ### Changed

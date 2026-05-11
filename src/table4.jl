@@ -1,6 +1,11 @@
 """
-make_table4(Nc, widthmax)
-Making tables[4] dictionary. This function is supposed to be run on the supercomputer.
+    make_table4(Nc, widthmax)
+
+Generate the SU(Nc) four-index coefficient table used by DMRG runs with
+`Nc > 2`.
+
+This is an MPI workload intended for a cluster or other multi-process
+environment. It writes `table4half_SU\$(Nc)_\$(widthmax).jld2`.
 """
 function make_table4(Nc, widthmax)
     MPI.Init()
