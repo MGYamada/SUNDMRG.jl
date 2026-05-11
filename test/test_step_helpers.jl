@@ -98,6 +98,36 @@ end
     @test side.block_enl == env_enl
 end
 
+@testset "DMRG step request helpers" begin
+    blocks = SUNDMRG._dmrg_step_blocks(:l, :sys, :env, :sys_tensors, :env_tensors, :sys_enl, :env_enl)
+    @test blocks isa SUNDMRG._DMRGStepBlocks
+    @test blocks.sys_label == :l
+    @test blocks.sys == :sys
+    @test blocks.env_tensor_dict == :env_tensors
+
+    request = @inferred SUNDMRG._dmrg_step_request(
+        blocks,
+        (16, 1e-5),
+        Val(true);
+        Ψ0_guess = :guess,
+        ES_max = 12.0,
+        correlation = Val(:nn),
+        margin = 2,
+        Sj = :sj,
+        noisy = false,
+    )
+    @test request isa SUNDMRG._DMRGStepRequest{true}
+    @test request.blocks === blocks
+    @test request.schedule.m == 16
+    @test request.schedule.α == 1e-5
+    @test request.options.Ψ0_guess == :guess
+    @test request.options.ES_max == 12.0
+    @test request.options.correlation == Val(:nn)
+    @test request.options.margin == 2
+    @test request.options.Sj == :sj
+    @test request.options.noisy == false
+end
+
 @testset "Density matrix balancer helper" begin
     @test SUNDMRG._density_matrix_balancer(Int[], 1, 0) == Int[]
     @test SUNDMRG._density_matrix_balancer([10, 20, 30], 1, 0) == [0, 0, 0]

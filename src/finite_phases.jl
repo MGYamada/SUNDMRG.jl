@@ -176,9 +176,9 @@ function _init_worker_state_edges(config::_FiniteRunConfig, runtime::_FiniteRunt
     return storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR
 end
 
-function _warmup_phase!(state::_FiniteState, config::_FiniteRunConfig, runtime::_FiniteRuntime)
-    (; lattice, Ly, N, m_warmup, widthmax, target, tables, alg, verbose) = config
-    (; engine, comm, rank, Ncpu, on_the_fly, mirror, γ_list, signfactor) = runtime
+function _warmup_phase!(state::_FiniteState{Nc}, config::_FiniteRunConfig, runtime::_FiniteRuntime) where Nc
+    (; Ly, N, m_warmup, verbose) = config
+    (; mirror) = runtime
 
     while state.blockL.length < Ly
         if verbose && isroot(runtime)
@@ -190,10 +190,14 @@ function _warmup_phase!(state::_FiniteState, config::_FiniteRunConfig, runtime::
         end
 
         if mirror
-            result = dmrg_step_result!(state.SiSj, :l, state.blockL, state.blockL, state.blockL_tensor_dict, state.blockL_tensor_dict, state.blockL_enl, state.blockL_enl, Ly, m_warmup..., widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, Val(false); lattice = lattice, alg = alg, noisy = verbose)
+            blocks = _dmrg_step_blocks(:l, state.blockL, state.blockL, state.blockL_tensor_dict, state.blockL_tensor_dict, state.blockL_enl, state.blockL_enl)
+            request = _dmrg_step_request(blocks, m_warmup, Val(false); noisy = verbose)
+            result = dmrg_step_result!(state.SiSj, request, config, runtime, Val(Nc))
             _apply_left_step_result!(state, result)
         else
-            result = dmrg_step_result!(state.SiSj, :l, state.blockL, state.blockR, state.blockL_tensor_dict, state.blockR_tensor_dict, state.blockL_enl, state.blockR_enl, Ly, m_warmup..., widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, Val(true); lattice = lattice, alg = alg, noisy = verbose)
+            blocks = _dmrg_step_blocks(:l, state.blockL, state.blockR, state.blockL_tensor_dict, state.blockR_tensor_dict, state.blockL_enl, state.blockR_enl)
+            request = _dmrg_step_request(blocks, m_warmup, Val(true); noisy = verbose)
+            result = dmrg_step_result!(state.SiSj, request, config, runtime, Val(Nc))
             _apply_left_step_result!(state, result)
             _apply_mirror_env_result!(state, result, config, runtime)
         end
@@ -210,7 +214,7 @@ function _warmup_phase!(state::_FiniteState, config::_FiniteRunConfig, runtime::
 end
 
 function _growth_phase!(state::_FiniteState{Nc}, config::_FiniteRunConfig, runtime::_FiniteRuntime) where Nc
-    (; lattice, Ly, N, m_warmup, widthmax, target, tables, alg, verbose) = config
+    (; lattice, Ly, N, m_warmup, widthmax, tables, verbose) = config
     (; engine, comm, rank, Ncpu, on_the_fly, mirror, γ_type, γ_list, signfactor) = runtime
 
     L = 2state.blockL.length
@@ -244,10 +248,14 @@ function _growth_phase!(state::_FiniteState{Nc}, config::_FiniteRunConfig, runti
 
             L = 2sys_block_enls[1].length
             if mirror
-                result = dmrg_step_result!(state.SiSj, :l, sys_blocks[1], sys_blocks[1], sys_tensor_dicts[1], sys_tensor_dicts[1], sys_block_enls[1], sys_block_enls[1], Ly, m_warmup..., widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, Val(false); lattice = lattice, alg = alg, noisy = verbose)
+                blocks = _dmrg_step_blocks(:l, sys_blocks[1], sys_blocks[1], sys_tensor_dicts[1], sys_tensor_dicts[1], sys_block_enls[1], sys_block_enls[1])
+                request = _dmrg_step_request(blocks, m_warmup, Val(false); noisy = verbose)
+                result = dmrg_step_result!(state.SiSj, request, config, runtime, Val(Nc))
                 sys_blocks[1], sys_tensor_dicts[1], sys_block_enls[1], state.Ψ[1], sys_trmats[1] = result.block, result.tensor_dict, result.block_enl, result.Ψ, result.trmat
             else
-                result = dmrg_step_result!(state.SiSj, :l, sys_blocks[1], sys_blocks[2], sys_tensor_dicts[1], sys_tensor_dicts[2], sys_block_enls[1], sys_block_enls[2], Ly, m_warmup..., widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, Val(true); lattice = lattice, alg = alg, noisy = verbose)
+                blocks = _dmrg_step_blocks(:l, sys_blocks[1], sys_blocks[2], sys_tensor_dicts[1], sys_tensor_dicts[2], sys_block_enls[1], sys_block_enls[2])
+                request = _dmrg_step_request(blocks, m_warmup, Val(true); noisy = verbose)
+                result = dmrg_step_result!(state.SiSj, request, config, runtime, Val(Nc))
                 sys_blocks[1], sys_tensor_dicts[1], sys_block_enls[1], state.Ψ[1], sys_trmats[1] = result.block, result.tensor_dict, result.block_enl, result.Ψ, result.trmat
                 sys_blocks[2], sys_tensor_dicts[2], sys_block_enls[2], sys_trmats[2] = result.env_block, result.env_tensor_dict, result.env_block_enl, result.env_trmat
                 state.Ψ[2] = wavefunction_reverse(state.Ψ[1], :l, sys_blocks[1], sys_blocks[2], widthmax, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine)
@@ -294,7 +302,9 @@ function _growth_phase!(state::_FiniteState{Nc}, config::_FiniteRunConfig, runti
                     root_println(runtime, graphic(sys_blocks[i], env_block; sys_label = sys_label))
                 end
 
-                result = dmrg_step_result!(state.SiSj, sys_label, sys_blocks[i], env_block, sys_tensor_dicts[i], env_tensor_dict, sys_block_enls[i], env_block_enls[i], Ly, m_warmup..., widthmax, target, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, Val(false); Ψ0_guess = Ψ0_guess, lattice = lattice, alg = alg, noisy = verbose && i == 1)
+                blocks = _dmrg_step_blocks(sys_label, sys_blocks[i], env_block, sys_tensor_dicts[i], env_tensor_dict, sys_block_enls[i], env_block_enls[i])
+                request = _dmrg_step_request(blocks, m_warmup, Val(false); Ψ0_guess = Ψ0_guess, noisy = verbose && i == 1)
+                result = dmrg_step_result!(state.SiSj, request, config, runtime, Val(Nc))
                 sys_blocks[i], sys_tensor_dicts[i], sys_block_enls[i], state.Ψ[i], sys_trmats[i] = result.block, result.tensor_dict, result.block_enl, result.Ψ, result.trmat
                 if i == 1
                     record_result = result

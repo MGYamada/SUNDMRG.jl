@@ -1,8 +1,130 @@
 """
-    dmrg_step!(...)
+    dmrg_step!(SiSj, request, settings, runtime, Val(Nc))
 
 A single DMRG step, returned as a `DMRGStepResult` with explicit fields.
 """
+function dmrg_step!(
+    SiSj,
+    request::_DMRGStepRequest{env_calc},
+    settings::_DMRGStepSettings,
+    runtime::_DMRGStepRuntime,
+    ::Val{Nc},
+) where {Nc, env_calc}
+    (; blocks, schedule, options) = request
+    (; sys_label, sys, env, sys_tensor_dict, env_tensor_dict, sys_enl, env_enl) = blocks
+    (; m, α) = schedule
+    (; Ly, widthmax, target, signfactor, tables, on_the_fly, γ_list, alg, lattice) = settings
+    (; comm, rank, Ncpu, engine) = runtime
+    (; Ψ0_guess, ES_max, correlation, margin, noisy) = options
+    Sj = options.Sj
+
+    workspace = _prepare_step_workspace(sys, env, sys_tensor_dict, env_tensor_dict, sys_enl, env_enl, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, lattice, Val(Nc))
+    (; sys_αs, env_αs, sys_βs, env_βs, sys_ms, env_ms, sys_len, env_len, superblock_bonds, bonds_hold, x_conn, y_conn, sys_dp, env_dp, sys_enlarge, env_enlarge, OM, superblock_H1, superblock_H2, sys_connS, env_connS, sys_tensor_dict_hold, env_tensor_dict_hold) = workspace
+
+    Ψ0 = _initial_step_wavefunction(Ψ0_guess, env_ms, sys_ms, OM, Ncpu, rank, engine)
+    lanczos_context = _StepLanczosContext(target, comm, rank, engine, alg, superblock_H1, bonds_hold, x_conn, y_conn, sys_connS, env_connS, sys_ms, env_ms, sys_βs, env_βs, sys_dp, env_dp, sys_enlarge, env_enlarge, sys_tensor_dict_hold, env_tensor_dict_hold, superblock_H2, OM, sys_len, env_len, Ncpu)
+    E, time_Lanczos = _run_step_lanczos!(Ψ0, lanczos_context)
+    energy = _step_energy(E, time_Lanczos, sys_enl, env_enl, superblock_bonds, comm, rank, noisy, Val(Nc))
+    density_context = _StepDensityContext(comm, rank, Ncpu, engine, α, m, ES_max, noisy)
+    measurement_context = _StepMeasurementContext(SiSj, Ly, x_conn, y_conn, sys_connS, env_connS, sys_len, env_len, sys_tensor_dict, env_tensor_dict, sys_tensor_dict_hold, env_tensor_dict_hold, sys_αs, env_αs, sys_βs, env_βs, sys_dp, env_dp, sys_ms, env_ms, sys_enlarge, env_enlarge, superblock_H2, OM, comm, rank, Ncpu, engine, correlation, margin, lattice)
+    block_context = _StepBlockContext(Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine, lattice)
+    correction_context = _StepCorrectionContext(superblock_bonds, sys_connS, env_connS, sys_enl, env_enl, x_conn, y_conn, sys_tensor_dict_hold, env_tensor_dict_hold, sys_tensor_dict, env_tensor_dict, sys_ms, env_ms, sys_dp, env_dp, sys_βs, env_βs, sys_enlarge, env_enlarge, engine)
+
+    newblock, newblock_enl, trmat, newtensor_dict = _step_result_buffers(Val(Nc), engine)
+    buffers = _DMRGStepOutputBuffers(
+        newblock,
+        newblock_enl,
+        trmat,
+        newtensor_dict,
+        Float64[],
+        Dict{SUNIrrep{Nc}, Vector{Float64}}[],
+        Float64[],
+    )
+
+    for switch in 1 : (env_calc ? 2 : 1)
+        side = _step_side_context(switch, sys_label, sys_len, env_len, sys_ms, env_ms, sys_βs, env_βs, sys_dp, env_dp, x_conn, y_conn, sys, env, sys_enl, env_enl)
+        Sj = _run_dmrg_step_side!(buffers, switch, side, Ψ0, Sj, blocks, workspace, density_context, measurement_context, block_context, correction_context, Val(Nc))
+    end
+
+    _report_overlap(Ψ0_guess, Ψ0, comm, rank, noisy)
+    return _dmrg_step_result(
+        Val(env_calc),
+        buffers.newblock[1],
+        buffers.newtensor_dict[1],
+        buffers.newblock_enl[1],
+        buffers.truncation_error[1],
+        energy,
+        Ψ0,
+        buffers.trmat[1],
+        buffers.ee[1],
+        buffers.es[1],
+        Sj,
+        buffers.newblock,
+        buffers.newtensor_dict,
+        buffers.newblock_enl,
+        buffers.trmat,
+    )
+end
+
+function _run_dmrg_step_side!(buffers::_DMRGStepOutputBuffers, switch, side::_StepSideContext, Ψ0, Sj, blocks::_DMRGStepBlocks, workspace::_StepWorkspace, density_context::_StepDensityContext, measurement_context::_StepMeasurementContext, block_context::_StepBlockContext, correction_context::_StepCorrectionContext, ::Val{Nc}) where Nc
+    (; sys, env, sys_enl, env_enl) = blocks
+    (; sys_len, env_len) = workspace
+    (; comm, rank, noisy) = density_context
+    (; ms, label) = side
+    βs = side.betas
+
+    balancer::Vector{Int} = _density_matrix_balancer(ms, density_context.Ncpu, rank)
+    MPI.Bcast!(balancer, 0, comm)
+
+    dimβ = dim.(βs)
+    ρs = _reduced_density_matrices(Ψ0, switch, side, dimβ, sys_len, env_len, density_context)
+
+    if rank == 0 && density_context.α != 0.0
+        _apply_density_matrix_correction!(ρs, switch, side, density_context, correction_context)
+    end
+
+    MPI.Barrier(comm)
+
+    ρnew = _balanced_density_matrices(ρs, balancer, side, density_context)
+
+    MPI.Barrier(comm)
+
+    λζtemp, time_DM = _density_eigendecomposition(ρnew, density_context)
+    time2 = MPI.Reduce(time_DM, MPI.MAX, 0, comm)
+
+    if noisy && rank == 0 && switch == 1
+        println(time2, " seconds elapsed in the density matrix diagonalization")
+    end
+
+    MPI.Barrier(comm)
+
+    λ, ζ = _collect_density_eigenpairs(λζtemp, balancer, side, density_context)
+
+    MPI.Barrier(comm)
+
+    ee_value, esi, transformation_matrix, msnew, Hnew, indices = _density_truncation_basis(λ, ζ, side, dimβ, sys_enl, env_enl, density_context, Val(Nc), switch)
+    push!(buffers.ee, ee_value)
+    push!(buffers.trmat, transformation_matrix)
+    push!(buffers.es, esi)
+
+    MPI.Barrier(comm)
+    tensor_dict, Sj = _measure_step_tensor_dict!(measurement_context, switch, label, sys, env, sys_enl, env_enl, Ψ0, transformation_matrix, Sj)
+    MPI.Barrier(comm)
+
+    _push_step_block!(buffers.newblock, buffers.newtensor_dict, buffers.newblock_enl, tensor_dict, side, msnew, Hnew, block_context, Val(Nc))
+
+    if rank == 0
+        push!(buffers.truncation_error, _step_truncation_error(λ, indices, dimβ, buffers.newblock_enl[switch], Val(Nc)))
+        if noisy && switch == 1
+            println("truncation error: ", buffers.truncation_error[switch])
+        end
+    else
+        push!(buffers.truncation_error, 0.0)
+    end
+
+    return Sj
+end
+
 function dmrg_step!(
     SiSj,
     sys_label,
@@ -35,98 +157,13 @@ function dmrg_step!(
     alg = :slow,
     noisy = true,
 ) where {Nc, env_calc}
-    workspace = _prepare_step_workspace(sys, env, sys_tensor_dict, env_tensor_dict, sys_enl, env_enl, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, lattice, Val(Nc))
-    (; sys_αs, env_αs, sys_βs, env_βs, sys_ms, env_ms, sys_len, env_len, superblock_bonds, bonds_hold, x_conn, y_conn, sys_dp, env_dp, sys_enlarge, env_enlarge, OM, superblock_H1, superblock_H2, sys_connS, env_connS, sys_tensor_dict_hold, env_tensor_dict_hold) = workspace
-
-    Ψ0 = _initial_step_wavefunction(Ψ0_guess, env_ms, sys_ms, OM, Ncpu, rank, engine)
-    lanczos_context = _StepLanczosContext(target, comm, rank, engine, alg, superblock_H1, bonds_hold, x_conn, y_conn, sys_connS, env_connS, sys_ms, env_ms, sys_βs, env_βs, sys_dp, env_dp, sys_enlarge, env_enlarge, sys_tensor_dict_hold, env_tensor_dict_hold, superblock_H2, OM, sys_len, env_len, Ncpu)
-    E, time_Lanczos = _run_step_lanczos!(Ψ0, lanczos_context)
-    energy = _step_energy(E, time_Lanczos, sys_enl, env_enl, superblock_bonds, comm, rank, noisy, Val(Nc))
-    density_context = _StepDensityContext(comm, rank, Ncpu, engine, α, m, ES_max, noisy)
-    measurement_context = _StepMeasurementContext(SiSj, Ly, x_conn, y_conn, sys_connS, env_connS, sys_len, env_len, sys_tensor_dict, env_tensor_dict, sys_tensor_dict_hold, env_tensor_dict_hold, sys_αs, env_αs, sys_βs, env_βs, sys_dp, env_dp, sys_ms, env_ms, sys_enlarge, env_enlarge, superblock_H2, OM, comm, rank, Ncpu, engine, correlation, margin, lattice)
-    block_context = _StepBlockContext(Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine, lattice)
-    correction_context = _StepCorrectionContext(superblock_bonds, sys_connS, env_connS, sys_enl, env_enl, x_conn, y_conn, sys_tensor_dict_hold, env_tensor_dict_hold, sys_tensor_dict, env_tensor_dict, sys_ms, env_ms, sys_dp, env_dp, sys_βs, env_βs, sys_enlarge, env_enlarge, engine)
-
-    newblock, newblock_enl, trmat, newtensor_dict = _step_result_buffers(Val(Nc), engine)
-
-    ee = Float64[]
-    es = Dict{SUNIrrep{Nc}, Vector{Float64}}[]
-    truncation_error = Float64[]
-
-    for switch in 1 : (env_calc ? 2 : 1)
-        side = _step_side_context(switch, sys_label, sys_len, env_len, sys_ms, env_ms, sys_βs, env_βs, sys_dp, env_dp, x_conn, y_conn, sys, env, sys_enl, env_enl)
-        (; len, ms, dp, conn, label, block, block_enl) = side
-        βs = side.betas
-
-        balancer::Vector{Int} = _density_matrix_balancer(ms, density_context.Ncpu, density_context.rank)
-        MPI.Bcast!(balancer, 0, comm)
-
-        dimβ = dim.(βs)
-        ρs = _reduced_density_matrices(Ψ0, switch, side, dimβ, sys_len, env_len, density_context)
-
-        if density_context.rank == 0 && density_context.α != 0.0
-            _apply_density_matrix_correction!(ρs, switch, side, density_context, correction_context)
-        end
-
-        MPI.Barrier(comm)
-
-        ρnew = _balanced_density_matrices(ρs, balancer, side, density_context)
-
-        MPI.Barrier(comm)
-
-        λζtemp, time_DM = _density_eigendecomposition(ρnew, density_context)
-
-        time2 = MPI.Reduce(time_DM, MPI.MAX, 0, comm)
-
-        if noisy && rank == 0 && switch == 1
-            println(time2, " seconds elapsed in the density matrix diagonalization")
-        end
-
-        MPI.Barrier(comm)
-
-        λ, ζ = _collect_density_eigenpairs(λζtemp, balancer, side, density_context)
-
-        MPI.Barrier(comm)
-
-        ee_value, esi, transformation_matrix, msnew, Hnew, indices = _density_truncation_basis(λ, ζ, side, dimβ, sys_enl, env_enl, density_context, Val(Nc), switch)
-        push!(ee, ee_value)
-        push!(trmat, transformation_matrix)
-        push!(es, esi)
-
-        MPI.Barrier(comm)
-        tensor_dict, Sj = _measure_step_tensor_dict!(measurement_context, switch, label, sys, env, sys_enl, env_enl, Ψ0, transformation_matrix, Sj)
-        MPI.Barrier(comm)
-
-        _push_step_block!(newblock, newtensor_dict, newblock_enl, tensor_dict, side, msnew, Hnew, block_context, Val(Nc))
-
-        if rank == 0
-            push!(truncation_error, _step_truncation_error(λ, indices, dimβ, newblock_enl[switch], Val(Nc)))
-            if noisy && switch == 1
-                println("truncation error: ", truncation_error[switch])
-            end
-        else
-            push!(truncation_error, 0.0)
-        end
-    end
-
-    _report_overlap(Ψ0_guess, Ψ0, comm, rank, noisy)
-    return _dmrg_step_result(
-        Val(env_calc),
-        newblock[1],
-        newtensor_dict[1],
-        newblock_enl[1],
-        truncation_error[1],
-        energy,
-        Ψ0,
-        trmat[1],
-        ee[1],
-        es[1],
-        Sj,
-        newblock,
-        newtensor_dict,
-        newblock_enl,
-        trmat,
-    )
+    blocks = _DMRGStepBlocks(sys_label, sys, env, sys_tensor_dict, env_tensor_dict, sys_enl, env_enl)
+    schedule = _DMRGStepSchedule(m, α)
+    settings = _DMRGStepSettings(Ly, widthmax, target, signfactor, tables, on_the_fly, γ_list, alg, lattice)
+    runtime = _DMRGStepRuntime(comm, rank, Ncpu, engine)
+    options = _DMRGStepOptions(Ψ0_guess, ES_max, correlation, margin, Sj, noisy)
+    request = _DMRGStepRequest(blocks, schedule, options, Val(env_calc))
+    return dmrg_step!(SiSj, request, settings, runtime, Val(Nc))
 end
 
 abstract type AbstractDMRGStepResult end
