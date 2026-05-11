@@ -20,9 +20,10 @@ init_internal_storage(fileio::Bool, scratch, block_table, trmat_table, tensor_ta
     init_internal_storage(Val(fileio), scratch, block_table, trmat_table, tensor_table, rank)
 
 function init_internal_storage(::Val{true}, scratch, block_table, trmat_table, tensor_table, rank)
-    dirid = rank == 0 ? lpad(rand(0 : 99999), 5, "0") : "00000"
+    dirid = "00000"
     if rank == 0
-        mkdir(joinpath(scratch, "temp$dirid"))
+        dirname = basename(mktempdir(scratch; prefix = "temp"))
+        dirid = startswith(dirname, "temp") ? dirname[5:end] : dirname
     end
     return JLD2InternalStorage(scratch, dirid)
 end

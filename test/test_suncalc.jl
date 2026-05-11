@@ -43,4 +43,5 @@ end
     OMself = SUNDMRG.OM_matrix([trivial3, funda3], trivial3)
     @test size(OMself) == (2, 2)
     @test OMself[1, 1] == 1
+    @test_throws ArgumentError SUNDMRG.wigner9ν(trivial3, trivial3, trivial3, trivial3, trivial3, trivial3, trivial3, trivial3, trivial3)
 end

@@ -106,6 +106,8 @@ end
     balancer = SUNDMRG._density_matrix_balancer([10, 20, 30], 3, 0)
     @test length(balancer) == 3
     @test all(x -> 0 <= x < 3, balancer)
+    @test balancer == [2, 1, 0]
+    @test SUNDMRG._density_matrix_balancer([10, 20, 30], 3, 0) == balancer
 
     ρs = SUNDMRG._empty_density_matrix_vector(SUNDMRG.CPUEngine)
     @test ρs isa Vector{Matrix{Float64}}

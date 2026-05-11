@@ -93,6 +93,7 @@ function wavefunction_reverse(Ψ0, sys_label, sys_block::Block{Nc}, env_block::B
 end
 
 function _wavefunction_reverse(Ψ0, sys_label, sys, env, widthmax, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, Nc)
+    # sys_label is kept for API symmetry with callers even though reversal is label-independent.
     γirrep = γ_list[mod1(sys.length + env.length, Nc)]
 
     sys_βs = MPI.bcast(sys.β_list, 0, comm)::Vector{SUNIrrep{Nc}}

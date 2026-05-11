@@ -111,12 +111,7 @@ _alg_value(alg::Symbol) = Val(alg)
 _alg_value(alg::Val) = alg
 
 function Lanczos!(A!::Function, initial, position, comm, rank, engine, mode::Val; maxiter = 100)
-    ketkm1 = deepcopy(initial)
-    for I in eachindex(ketkm1)
-        for J in eachindex(ketkm1[I])
-            ketkm1[I][J] .= 0.0
-        end
-    end
+    ketkm1 = _zero_lanczos_vector(initial)
     myrdiv!(initial, sqrt(MPI.Allreduce(mydot(initial, initial), MPI.SUM, comm)))
     ketk = deepcopy(initial)
     ketk1 = deepcopy(ketk)
@@ -133,11 +128,8 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine, mode::Val
         α = MPI.Allreduce(mydot(ketk, ketk1), MPI.SUM, comm)
         push!(αlist, α)
         if k >= position
-            if rank == 0
-                vals, vecs = LAPACK.stev!('V', copy(αlist), copy(βlist))
-            end
-            vals = MPI.bcast(vals, 0, comm)::Vector{Float64}
-            if k == maxiter || abs((vals[position] - vold) / vals[position]) < tol_Lanczos
+            vals, vecs = _lanczos_ritz_vectors(αlist, βlist, comm, rank)
+            if k == maxiter || _lanczos_eigenvalue_converged(vals[position], vold)
                 break
             end
             vold = vals[position]
@@ -146,10 +138,7 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine, mode::Val
         myaxpy!(-α, ketk, ketk1)
         β = sqrt(MPI.Allreduce(mydot(ketk1, ketk1), MPI.SUM, comm))
         if β == 0.0
-            if rank == 0
-                vals, vecs = LAPACK.stev!('V', copy(αlist), copy(βlist))
-            end
-            vals = MPI.bcast(vals, 0, comm)::Vector{Float64}
+            vals, vecs = _lanczos_ritz_vectors(αlist, βlist, comm, rank)
             break
         end
         myrdiv!(ketk1, β)
@@ -160,7 +149,38 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine, mode::Val
         k += 1
     end
     vecs = MPI.bcast(vecs, 0, comm)::Matrix{Float64}
+    if size(vecs, 2) == 0
+        return first(αlist)
+    end
 
+    position = _reconstruct_lanczos_vector!(mode, A!, engine, initial, ketk, ketk1, ketkm1, vecs, αlist, βlist, position, cache)
+    _refine_lanczos_vector!(A!, initial, ketk, ketkm1, ketk1, vals[position], comm, rank)
+end
+
+function _zero_lanczos_vector(initial)
+    ket = deepcopy(initial)
+    for I in eachindex(ket)
+        for J in eachindex(ket[I])
+            ket[I][J] .= 0.0
+        end
+    end
+    return ket
+end
+
+function _lanczos_ritz_vectors(αlist, βlist, comm, rank)
+    vals = Float64[]
+    vecs = zeros(0, 0)
+    if rank == 0
+        vals, vecs = LAPACK.stev!('V', copy(αlist), copy(βlist))
+    end
+    vals = MPI.bcast(vals, 0, comm)::Vector{Float64}
+    return vals, vecs
+end
+
+_lanczos_eigenvalue_converged(val, vold) = abs(val - vold) < tol_Lanczos * max(abs(val), 1.0)
+_lanczos_wavefunction_converged(val, target_val, var) = abs(val - target_val) < tol_wavefunction * max(abs(val), 1.0) && abs(var - val ^ 2) < tol_wavefunction * max(abs(val ^ 2), 1.0)
+
+function _reconstruct_lanczos_vector!(mode::Val, A!, engine, initial, ketk, ketk1, ketkm1, vecs, αlist, βlist, position, cache)
     for I in eachindex(ketkm1)
         for J in eachindex(ketkm1[I])
             ketkm1[I][J] .= 0.0
@@ -173,17 +193,18 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine, mode::Val
     for k in 1 : size(vecs, 1) - 1
         β = _lanczos_reconstruct_step!(mode, A!, engine, vecs[k + 1, position], cache, initial, ketk, ketk1, ketkm1, αlist, βlist, k, β)
     end
+    return position
+end
+
+function _refine_lanczos_vector!(A!, initial, ketk, ketkm1, ketk1, target_val, comm, rank)
     myrdiv!(initial, sqrt(MPI.Allreduce(mydot(initial, initial), MPI.SUM, comm)))
     A!(ketk, initial)
     val = MPI.Allreduce(mydot(initial, ketk), MPI.SUM, comm)
-    val2 = val ^ 2
     var = MPI.Allreduce(mydot(ketk, ketk), MPI.SUM, comm)
-    if abs((val - vals[position]) / val) < tol_wavefunction && abs((var - val2) / val2) < tol_wavefunction
-        rtnval = val
-    else
-        rtnval = CG!(A!, val, initial, ketk, ketkm1, ketk1, comm, rank)
+    if _lanczos_wavefunction_converged(val, target_val, var)
+        return val
     end
-    rtnval
+    return CG!(A!, val, initial, ketk, ketkm1, ketk1, comm, rank)
 end
 
 _init_lanczos_cache(::Val{:slow}, ketk) = nothing

@@ -4,7 +4,7 @@ using JLD2
 function main()
     Nc = 5
     widthmax = 3
-    @load "../jld2/table_SU$(Nc)_$widthmax.jld2" tables
+    @load joinpath(@__DIR__, "..", "jld2", "table_SU$(Nc)_$widthmax.jld2") tables
     Lx = parse(Int, ARGS[1])
     Ly = parse(Int, ARGS[2])
     correlation = Lx < 30 ? :nn : :chain
