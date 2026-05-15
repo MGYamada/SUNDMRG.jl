@@ -1,14 +1,18 @@
 """
-    make_table4(Nc, widthmax)
+    make_table4(Nc, widthmax; manage_mpi = true)
 
 Generate the SU(Nc) four-index coefficient table used by DMRG runs with
 `Nc > 2`.
 
 This is an MPI workload intended for a cluster or other multi-process
 environment. It writes `table4half_SU\$(Nc)_\$(widthmax).jld2`.
+
+When `manage_mpi = true`, the function initializes MPI if needed and finalizes
+MPI only if it performed the initialization. Pass `manage_mpi = false` when MPI
+is managed by the caller.
 """
-function make_table4(Nc, widthmax)
-    MPI.Init()
+function make_table4(Nc, widthmax; manage_mpi = true)
+    did_initialize_mpi = _init_table_mpi!(manage_mpi)
 
     comm = MPI.COMM_WORLD
     size = MPI.Comm_size(comm)
@@ -148,5 +152,5 @@ function make_table4(Nc, widthmax)
         println("All finished!")
     end
 
-    MPI.Finalize()
+    _finalize_table_mpi!(did_initialize_mpi)
 end
