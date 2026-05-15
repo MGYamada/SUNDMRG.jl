@@ -1,14 +1,18 @@
 """
-    make_table3nu(Nc, widthmax)
+    make_table3nu(Nc, widthmax; manage_mpi = true)
 
 Generate the SU(Nc) three-symbol coefficient table used by DMRG runs with
 `Nc > 2`.
 
 This is an MPI workload intended for a cluster or other multi-process
 environment. It writes `table3nuhalf_SU\$(Nc)_\$(widthmax).jld2`.
+
+When `manage_mpi = true`, the function initializes MPI if needed and finalizes
+MPI only if it performed the initialization. Pass `manage_mpi = false` when MPI
+is managed by the caller.
 """
-function make_table3nu(Nc, widthmax)
-    MPI.Init()
+function make_table3nu(Nc, widthmax; manage_mpi = true)
+    did_initialize_mpi = _init_table_mpi!(manage_mpi)
 
     comm = MPI.COMM_WORLD
     Ncpu = MPI.Comm_size(comm)
@@ -183,5 +187,5 @@ function make_table3nu(Nc, widthmax)
         println("All finished!")
     end
 
-    MPI.Finalize()
+    _finalize_table_mpi!(did_initialize_mpi)
 end

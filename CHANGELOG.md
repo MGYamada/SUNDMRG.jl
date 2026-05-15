@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.5.3
+
+### Changed
+
+- Bumped package version to v1.5.3.
+- Split SU(N) representation-theory helpers into a `RepresentationTheory` submodule.
+- Added SU(2) 3ν, 6ν, and 9ν coefficient regression tests.
+- Added SU(3)-SU(5) coefficient regression tests against the bundled JLD2 tables.
+- Allowed table-generation utility scripts to accept `Nc` and `widthmax` command-line arguments.
+- Made coefficient-table MPI initialization/finalization cooperate with caller-managed MPI sessions.
+
 ## v1.5.2
 
 ### Changed

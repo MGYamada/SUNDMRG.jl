@@ -5,7 +5,7 @@ using SUNDMRG
 
 makedocs(;
     sitename = "SUNDMRG.jl",
-    modules = [SUNDMRG],
+    modules = [SUNDMRG, SUNDMRG.RepresentationTheory],
     checkdocs = :none,
     format = Documenter.HTML(; prettyurls = get(ENV, "CI", "false") == "true"),
     pages = [
