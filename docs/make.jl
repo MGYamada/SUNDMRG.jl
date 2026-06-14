@@ -10,12 +10,21 @@ makedocs(;
     format = Documenter.HTML(; prettyurls = get(ENV, "CI", "false") == "true"),
     pages = [
         "Home" => "index.md",
-        "DMRG Overview" => "dmrg_overview.md",
-        "Usage" => "usage.md",
-        "Examples" => "examples.md",
-        "SU(Nc) Representation Theory" => "representation_theory.md",
-        "Examples of SU(Nc) Representations" => "su_n_examples.md",
-        "Representation Labels in SUNDMRG.jl" => "representation_notation.md",
+        "Getting Started" => [
+            "Usage" => "usage.md",
+            "Runtime Options" => "runtime_options.md",
+            "Examples" => "examples.md",
+        ],
+        "Coefficient Tables" => "coefficient_tables.md",
+        "Algorithm" => [
+            "DMRG Overview" => "dmrg_overview.md",
+            "SUNDMRG Algorithm" => "algorithm.md",
+        ],
+        "SU(Nc) Symmetry" => [
+            "Representation Theory" => "representation_theory.md",
+            "Representation Examples" => "su_n_examples.md",
+            "Representation Labels" => "representation_notation.md",
+        ],
         "API Reference" => "api.md",
     ],
 )

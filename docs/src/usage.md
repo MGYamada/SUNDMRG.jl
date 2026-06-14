@@ -2,8 +2,7 @@
 
 This page shows the main user-facing workflow for finite-system DMRG runs.
 The examples use small dimensions for clarity; production calculations usually require
-larger bond dimensions, multiple MPI ranks, and, for SU(Nc) with ``N_c > 2``,
-precomputed coefficient tables.
+larger bond dimensions, multiple MPI ranks, and backend-specific runtime options.
 
 ## Installation
 
@@ -58,51 +57,18 @@ m_cooldown = (1600, 0.0)
 Density-matrix mixing can help avoid local minima early in a calculation.
 Use zero, or a negligibly small value, near the final sweeps.
 
+For more detail on how this schedule is used during warmup, growth, sweeps, and
+measurements, see [SUNDMRG Algorithm](algorithm.md).
+
 ## SU(Nc) Runs With Tables
 
-For ``N_c > 2``, pass a `widthmax` and precomputed coefficient tables.
-The repository examples load these from `jld2/table_SU$(Nc)_$(widthmax).jld2`.
+SU(2) calculations evaluate their symmetry coefficients on the fly. For
+``N_c > 2``, pass a `widthmax` and a precomputed coefficient table with the
+`tables` keyword.
 
-```julia
-using SUNDMRG
-using JLD2
-
-Nc = 3
-widthmax = 13
-@load joinpath(@__DIR__, "..", "jld2", "table_SU$(Nc)_$widthmax.jld2") tables
-
-rank, dmrg = run_DMRG(
-    SU(Nc)HeisenbergModel(),
-    HoneycombLattice(6, 6, :ZC),
-    (100, 1e-5),
-    [(100, 1e-5), (200, 1e-6), (400, 1e-7), (800, 0.0)],
-    (1600, 0.0),
-    CPUEngine;
-    widthmax = widthmax,
-    tables = tables,
-    fileio = true,
-    correlation = :nn,
-    margin = 5,
-    alg = :fast,
-)
-```
-
-## MPI Lifecycle
-
-By default, `run_DMRG` initializes and finalizes MPI for one run.
-If you want multiple runs in the same Julia process, manage MPI explicitly.
-
-```julia
-using SUNDMRG
-
-init_DMRG!()
-try
-    run_DMRG(SU(2)HeisenbergModel(), SquareLattice(4, 4), 100, [100], 100, CPUEngine; manage_mpi = false)
-    run_DMRG(SU(2)HeisenbergModel(), SquareLattice(6, 4), 100, [100], 100, CPUEngine; manage_mpi = false)
-finally
-    finalize_DMRG!()
-end
-```
+See [Coefficient Tables](coefficient_tables.md) for table loading and table
+generation. The repository examples load bundled tables from the `jld2/`
+directory.
 
 ## Common Keywords
 
@@ -116,6 +82,9 @@ end
 - `alg = :slow`: Lanczos mode; examples for larger runs use `:fast`.
 - `verbose = true`: print progress on rank 0.
 - `manage_mpi = true`: let `run_DMRG` manage MPI for a single call.
+
+See [Runtime Options](runtime_options.md) for MPI lifecycle management, GPU runs,
+file-backed storage, Lanczos modes, and correlation measurement options.
 
 ## Output
 

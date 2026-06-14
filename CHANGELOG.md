@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.5.4
+
+### Changed
+
+- Bumped package version to v1.5.4.
+- Added a SUNDMRG-specific algorithm documentation page.
+- Reorganized the documentation navigation around getting started, runtime options, coefficient tables, algorithm notes, SU(Nc) symmetry, and API reference.
+- Split coefficient-table and runtime-option details out of the usage guide.
+- Reduced README duplication by keeping it focused on the shortest runnable example and documentation entry points.
+
 ## v1.5.3
 
 ### Changed
