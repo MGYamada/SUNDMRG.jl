@@ -23,45 +23,27 @@ After that, you can do:
 
 ## Usage
 
-If you want to run the simulation of the SU(2) Heisenberg model on the 4x4 square lattice
-with a default setting, please use the following.
-```julia
-rank, dmrg = run_DMRG(SU(2)HeisenbergModel(), SquareLattice(4, 4), 100, [100, 200, 400, 800], 1600, CPUEngine)
-```
-`dmrg` is returned only when `rank == 0` when you are using the MPI parallelization.
+Run a small SU(2) Heisenberg calculation on a 4x4 square lattice with:
 
-By default, `run_DMRG` initializes and finalizes MPI for a single run. If you want to
-run multiple simulations in the same Julia session, manage MPI outside the calls:
 ```julia
-init_DMRG!()
-try
-    run_DMRG(SU(2)HeisenbergModel(), SquareLattice(4, 4), 100, [100], 100, CPUEngine; manage_mpi = false)
-    run_DMRG(SU(2)HeisenbergModel(), SquareLattice(4, 4), 100, [100], 100, CPUEngine; manage_mpi = false)
-finally
-    finalize_DMRG!()
-end
+using SUNDMRG
+
+rank, dmrg = run_DMRG(
+    SU(2)HeisenbergModel(),
+    SquareLattice(4, 4),
+    100,
+    [100, 200, 400, 800],
+    1600,
+    CPUEngine,
+)
 ```
 
-For a more detailed configuration, please look at the examples directory.
+`dmrg` is returned only on MPI rank 0. SU(2) coefficients are evaluated on the fly;
+SU(N) runs with `N > 2` usually use precomputed coefficient tables.
 
-Please be careful that the expectation value of the bond operator is returned
-in the format of P<sub>ij</sub> - 1 / N<sub>c</sub> for SU(N<sub>c</sub>) for the accuracy.
-
-## SU(2)
-
-SUNDMRG.jl supports an on-the-fly calculation of SU(2) symmetry coefficients (Wigner symbols).
-The bond Hamiltonian is **S**<sub>i</sub>・**S**<sub>j</sub> in the SU(2) case, not P<sub>ij</sub> = 2 **S**<sub>i</sub>・**S**<sub>j</sub> + 1 / 2.
-SiSj is also evaluated by **S**<sub>i</sub>・**S**<sub>j</sub>, not P<sub>ij</sub> - 1 / 2.
-
-## Density matrix mixing
-
-The density matrix mixing (sometimes called a noise term) is a technique to have a better convergence
-in DMRG. It perturbs the density matrix a little, avoiding being stuck in some local minima.
-The small perturbation is specified in the second term of the tuple for each sweep as follows.
-```julia
-rank, dmrg = run_DMRG(SU(3)HeisenbergModel(), SquareLattice(6, 6), (100, 1e-5), [(100, 1e-5), (200, 1e-6), (400, 1e-7), (800, 1e-8)], (1600, 0.0), CPUEngine; widthmax = widthmax, tables = tables)
-```
-The value has to become zero or a negligibly small value in the last few sweeps.
+See the documentation for [usage](docs/src/usage.md), [examples](docs/src/examples.md),
+and the [algorithm overview](docs/src/algorithm.md). Runnable scripts are available
+in the `examples/` directory.
 
 ## Dependency
 

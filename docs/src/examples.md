@@ -103,21 +103,5 @@ for the result object.
 For ``N_c > 2``, the table files are generated separately.
 The table builders are MPI-oriented workloads and are usually run on a cluster.
 
-```julia
-using SUNDMRG
-
-make_table3nu(3, 13)
-make_table4(3, 13)
-make_table(3, 13)
-```
-
-`make_table3nu` and `make_table4` produce the partial table files.
-`make_table` combines them into the `tables` file consumed by `run_DMRG`.
-
-The scripts in `utils/` provide the same entry points from the command line:
-
-```bash
-julia --project=. utils/make_table3nu.jl 3 13
-julia --project=. utils/make_table4.jl 3 13
-julia --project=. utils/make_table.jl 3 13
-```
+See [Coefficient Tables](coefficient_tables.md) for the generation flow and the
+`utils/` commands.
