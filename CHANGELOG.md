@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.5.6
+
+### Changed
+
+- Bumped package version to v1.5.6.
+- Added Wigner/Racah coefficient documentation connecting 3ν, 6ν, and 9ν definitions to implementation functions and DMRG table slots.
+- Linked the Wigner/Racah coefficient guide from the documentation navigation, index, and coefficient-table page.
+
+### Tests
+
+- Added definition-based representation-theory tests for Young row-length enumeration, hook-length multiplicities, Weyl dimensions, tensor-product dimension preservation, and SDC orthonormality.
+- Added SDC recoupling tests for `_3ν`, `_6ν`, and `_9ν`, including the formal `P_{23}` exchange in the 9ν construction.
+
 ## v1.5.5
 
 ### Changed

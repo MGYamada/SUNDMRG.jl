@@ -100,4 +100,6 @@ environment orderings.
 Most users only need to load the table object and pass it to `run_DMRG`. The
 representation-theory details behind the coefficients are described in
 [SU(Nc) Representation Theory](representation_theory.md) and
-[SUNDMRG Algorithm](algorithm.md).
+[SUNDMRG Algorithm](algorithm.md). For a direct map from Wigner/Racah symbols to
+implementation functions and table slots, see
+[Wigner/Racah Coefficients](wigner_racah.md).
