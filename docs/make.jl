@@ -24,6 +24,7 @@ makedocs(;
             "Representation Theory" => "representation_theory.md",
             "Representation Examples" => "su_n_examples.md",
             "Representation Labels" => "representation_notation.md",
+            "Wigner/Racah Coefficients" => "wigner_racah.md",
         ],
         "API Reference" => "api.md",
     ],
