@@ -15,8 +15,14 @@
 
     @test SUNDMRG.load_block(storage, :l, 2) == block
     @test SUNDMRG.load_trmat(storage, :l, 2) == trmat
+    @test SUNDMRG.has_tensor(storage, :l, 2, 1)
     @test SUNDMRG.load_tensor(storage, :l, 2, 1) == tensor
+    @test !SUNDMRG.has_tensor(storage, :l, 2, 1)
     @test SUNDMRG.load_tensor(storage, :l, 2, 1) === nothing
+
+    SUNDMRG.save_tensor(storage, :l, 2, 1, tensor)
+    @test SUNDMRG.take_tensor!(storage, :l, 2, 1) == tensor
+    @test !SUNDMRG.has_tensor(storage, :l, 2, 1)
 
     @test SUNDMRG.init_internal_storage(false, ".", block_table, trmat_table, tensor_table, 0) isa SUNDMRG.MemoryInternalStorage
 
@@ -31,8 +37,14 @@
 
         @test SUNDMRG.load_block(disk_storage, :r, 3) == block
         @test SUNDMRG.load_trmat(disk_storage, :r, 3) == trmat
+        @test SUNDMRG.has_tensor(disk_storage, :r, 3, 2)
         @test SUNDMRG.load_tensor(disk_storage, :r, 3, 2) == tensor
+        @test !SUNDMRG.has_tensor(disk_storage, :r, 3, 2)
         @test SUNDMRG.load_tensor(disk_storage, :r, 3, 2) === nothing
+
+        SUNDMRG.save_tensor(disk_storage, :r, 3, 2, tensor)
+        @test SUNDMRG.take_tensor!(disk_storage, :r, 3, 2) == tensor
+        @test !SUNDMRG.has_tensor(disk_storage, :r, 3, 2)
 
         SUNDMRG.cleanup_storage!(disk_storage)
         @test !isdir(joinpath(scratch, "temp$dirid"))
@@ -42,5 +54,10 @@
         @test isdir(joinpath(scratch, "temp$(initialized.dirid)"))
         SUNDMRG.cleanup_storage!(initialized)
         @test !isdir(joinpath(scratch, "temp$(initialized.dirid)"))
+
+        worker_storage = SUNDMRG.init_internal_storage(true, scratch, block_table, trmat_table, tensor_table, 1)
+        @test worker_storage isa SUNDMRG.JLD2InternalStorage
+        @test worker_storage.dirid == "00000"
+        @test !isdir(joinpath(scratch, "temp00000"))
     end
 end

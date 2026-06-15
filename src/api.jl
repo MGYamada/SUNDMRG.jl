@@ -20,15 +20,29 @@ return `nothing` for the output.
 """
 function run_DMRG end
 
-_dmrg_schedule(m::Int) = (m, 0.0)
-_dmrg_schedule(m::Tuple{Int, Float64}) = m
+function _dmrg_schedule(m::Integer)
+    _dmrg_schedule(m, 0.0)
+end
+
+function _dmrg_schedule(m::Tuple{<:Integer, <:Real})
+    _dmrg_schedule(m[1], m[2])
+end
+
+function _dmrg_schedule(m::Integer, α::Real)
+    m > 0 || throw(ArgumentError("DMRG schedule bond dimension m must be positive"))
+    α = Float64(α)
+    isfinite(α) || throw(ArgumentError("DMRG schedule density-matrix mixing α must be finite"))
+    α >= 0.0 || throw(ArgumentError("DMRG schedule density-matrix mixing α must be nonnegative"))
+    return (Int(m), α)
+end
+
 _dmrg_schedule_list(ms::AbstractVector) = Tuple{Int, Float64}[_dmrg_schedule(m) for m in ms]
 
-function run_DMRG(model::HeisenbergModelSU{Nc}, lat::SquareLattice, m_warmup::Union{Int, Tuple{Int, Float64}}, m_sweep_list::AbstractVector, m_cooldown::Union{Int, Tuple{Int, Float64}}, engine::Type{<:Engine}; kwargs...) where Nc
+function run_DMRG(model::HeisenbergModelSU{Nc}, lat::SquareLattice, m_warmup::Union{Integer, Tuple{<:Integer, <:Real}}, m_sweep_list::AbstractVector, m_cooldown::Union{Integer, Tuple{<:Integer, <:Real}}, engine::Type{<:Engine}; kwargs...) where Nc
     _run_DMRG(model, :square, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
 end
 
-function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup::Union{Int, Tuple{Int, Float64}}, m_sweep_list::AbstractVector, m_cooldown::Union{Int, Tuple{Int, Float64}}, engine::Type{<:Engine}; kwargs...) where Nc
+function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup::Union{Integer, Tuple{<:Integer, <:Real}}, m_sweep_list::AbstractVector, m_cooldown::Union{Integer, Tuple{<:Integer, <:Real}}, engine::Type{<:Engine}; kwargs...) where Nc
     if lat.BC == :ZC
         return _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
     end
