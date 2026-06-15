@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.5.5
+
+### Changed
+
+- Bumped package version to v1.5.5.
+- Accepted integer density-matrix mixing values in DMRG schedules.
+- Added early validation for common `run_DMRG` keyword arguments.
+
+### Tests
+
+- Expanded characterization coverage for API input normalization, MPI lifecycle handling, internal storage, and step helper boundary cases.
+- Added small `run_DMRG` regressions for fast Lanczos reconstruction and chain correlation measurement.
+- Added itemized unit coverage for `RepresentationTheory` internal helpers.
+
 ## v1.5.4
 
 ### Changed

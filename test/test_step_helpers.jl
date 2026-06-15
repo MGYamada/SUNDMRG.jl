@@ -41,6 +41,20 @@ end
 
     @test SUNDMRG._rank_held_bonds([(1, 1), (2, 2), (2, 1)], 2, 0) == [(1, 1), (0, 0)]
     @test SUNDMRG._rank_held_bonds([(1, 1), (2, 2), (2, 1)], 2, 1) == [(2, 2), (2, 1)]
+
+    bonds, x_conn, y_conn = SUNDMRG._step_bonds(3, 3, 2, :honeycombZC)
+    @test bonds == [(2, 2), (2, 1)]
+    @test x_conn == 2
+    @test y_conn == 2
+
+    for rank in 0 : 3
+        @test SUNDMRG._rank_held_bonds(Tuple{Int, Int}[], 4, rank) == Tuple{Int, Int}[]
+    end
+
+    @test SUNDMRG._rank_held_bonds([(1, 1)], 4, 0) == [(0, 0)]
+    @test SUNDMRG._rank_held_bonds([(1, 1)], 4, 1) == [(0, 0)]
+    @test SUNDMRG._rank_held_bonds([(1, 1)], 4, 2) == [(0, 0)]
+    @test SUNDMRG._rank_held_bonds([(1, 1)], 4, 3) == [(1, 1)]
 end
 
 @testset "DMRG step allocation helpers" begin
