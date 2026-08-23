@@ -47,10 +47,10 @@ in the `examples/` directory.
 
 ## Dependency
 
-* Julia 1.6-
-* CUDA.jl 5.0.0-
-* MAGMA.jl 0.1.2-
-* SUNRepresentations.jl 0.1.2-
+* Julia 1.10 or later
+* CUDA.jl 5 or 6
+* MAGMA.jl 0.1.2
+* SUNRepresentations.jl 0.3
 * MPI.jl: We strongly recommend to use Open MPI.
 
 ## Testing

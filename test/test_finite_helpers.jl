@@ -83,3 +83,10 @@ end
     @test env_step.env_block_enl == 12
     @test env_step.env_trmat == 13
 end
+
+@testset "Finite-sweep convergence helper" begin
+    @test SUNDMRG._relative_change_converged(0.0, 0.0, 1e-5)
+    @test SUNDMRG._relative_change_converged(-2.0, -2.0 - 1e-6, 1e-5)
+    @test !SUNDMRG._relative_change_converged(0.0, 1e-12, 1e-5)
+    @test !SUNDMRG._relative_change_converged(NaN, NaN, 1e-5)
+end

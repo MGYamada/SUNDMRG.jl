@@ -77,9 +77,21 @@ For each Hamiltonian application:
 - SU(Nc) recoupling coefficients connect allowed sector transitions;
 - MPI distributes the sector and bond contributions across ranks.
 
-The `alg = :slow` mode reconstructs the target Ritz vector by replaying the Lanczos
-recurrence. The `alg = :fast` mode caches Lanczos vectors on the host and uses them
-to speed up reconstruction, which can be useful for larger runs.
+For a ground-state solve, the `alg = :slow` mode reconstructs the target Ritz vector
+by replaying the Lanczos recurrence. The `alg = :fast` mode caches Lanczos vectors
+on the host and uses them to speed up reconstruction. Excited-state solves retain
+and fully reorthogonalize the Krylov basis to prevent duplicate (ghost) Ritz values;
+their memory use is therefore higher in either mode. If a Krylov chain ends before
+the requested excited level is reached, the solver starts another vector orthogonal
+to the retained basis. It never silently substitutes the highest available Ritz
+value for a requested level. Interior sweep cuts require the requested level;
+boundary cuts may temporarily have a one-dimensional effective space and use the
+only available state while the cut moves inward.
+
+The solver checks the final Hamiltonian residual after its refinement step. If the
+requested state remains unconverged, it raises an error rather than returning an
+unchecked energy. `lanczos_maxiter` controls the Krylov basis limit and must be at
+least `target + 1`.
 
 ## Density Matrix Truncation
 
@@ -116,6 +128,9 @@ The sweep phase fixes the system size and moves the active cut left and right th
 the lattice. At each cut, the environment block is loaded from saved block data,
 enlarged, and used to improve the current system block. Sweeps continue until the
 relative changes in energy and entanglement entropy pass the configured tolerances.
+Relative changes are well-defined when either value is zero, and
+`max_cooldown_sweeps` bounds the number of cooldown sweeps (100 by default). The run
+raises an error instead of sweeping indefinitely if that limit is reached.
 
 ## Measurements
 

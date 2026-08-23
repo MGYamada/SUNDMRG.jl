@@ -6,11 +6,11 @@ larger bond dimensions, multiple MPI ranks, and backend-specific runtime options
 
 ## Installation
 
-Install the package into a Julia environment with its dependencies available.
+Install the package into a Julia 1.10 or later environment with its dependencies available.
 MAGMA.jl must be installed before adding SUNDMRG.jl.
 
 ```julia
-] add https://github.com/MGYamada/MAGMA.jl.git
+] add https://github.com/MGYamada/MAGMA.jl.git#5545b1a27ee2516d9766c6a15238f006eceb1629
 ] add https://github.com/MGYamada/SUNDMRG.jl.git
 ```
 
@@ -73,10 +73,13 @@ directory.
 ## Common Keywords
 
 - `target = 0`: target state, where `0` is the ground state.
+- `lanczos_maxiter = 100`: maximum Krylov basis size; it must be at least `target + 1`.
 - `widthmax = 0`: representation table width for ``N_c > 2``.
 - `tables = nothing`: precomputed table dictionary for ``N_c > 2``.
 - `fileio = false`: store intermediate blocks on disk instead of only in memory.
 - `scratch = "."`: directory used for temporary file-backed storage.
+- `tol_energy = 1e-5`, `tol_EE = 1e-3`: cooldown convergence tolerances.
+- `max_cooldown_sweeps = 100`: stop with an error if cooldown does not converge within this many sweeps.
 - `correlation = :none`: set to `:nn` or `:chain` to measure correlations.
 - `margin = 0`: boundary margin used by correlation measurement.
 - `alg = :slow`: Lanczos mode; examples for larger runs use `:fast`.

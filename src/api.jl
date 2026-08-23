@@ -8,9 +8,11 @@ Run the finite-system DMRG algorithm.
 
 Common keyword arguments:
 - `target = 0`: target state (`0` for the ground state, `1` for the first excited state, etc.).
+- `lanczos_maxiter = 100`: maximum Krylov basis size; must be at least `target + 1`.
 - `widthmax = 0`, `tables = nothing`: representation table controls for SU(N > 2).
 - `fileio = false`, `scratch = "."`: store intermediate blocks on disk.
 - `correlation = :none`, `margin = 0`: optional correlation measurement.
+- `tol_energy = 1e-5`, `tol_EE = 1e-3`, `max_cooldown_sweeps = 100`: convergence controls.
 - `alg = :slow`: Lanczos/eigensolver mode.
 - `verbose = true`: print progress information.
 - `manage_mpi = true`: initialize/finalize MPI inside the call. Use `false` when MPI is managed externally.

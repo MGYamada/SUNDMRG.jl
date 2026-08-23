@@ -53,10 +53,10 @@ function _step_spin_operator(x, conn, connS, ms, βs, dp, enlarging, tensor_dict
 end
 
 function _run_step_lanczos!(Ψ0, context::_StepLanczosContext)
-    (; target, comm, rank, engine, alg, superblock_H1, bonds_hold, x_conn, y_conn, sys_connS, env_connS, sys_ms, env_ms, sys_βs, env_βs, sys_dp, env_dp, sys_enlarge, env_enlarge, sys_tensor_dict_hold, env_tensor_dict_hold, superblock_H2, OM, sys_len, env_len, Ncpu) = context
+    (; target, maxiter, require_target, comm, rank, engine, alg, superblock_H1, bonds_hold, x_conn, y_conn, sys_connS, env_connS, sys_ms, env_ms, sys_βs, env_βs, sys_dp, env_dp, sys_enlarge, env_enlarge, sys_tensor_dict_hold, env_tensor_dict_hold, superblock_H2, OM, sys_len, env_len, Ncpu) = context
 
     local E
-    time_Lanczos = @elapsed E = Lanczos!(Ψ0, target + 1, comm, rank, engine; alg = alg) do Ψout, Ψin
+    time_Lanczos = @elapsed E = Lanczos!(Ψ0, target + 1, comm, rank, engine; maxiter = maxiter, alg = alg, allow_fewer = !require_target) do Ψout, Ψin
         for s in superblock_H1
             for J in eachindex(Ψin[s.env_ind, s.sys_ind])
                 temp1 = Ψin[s.env_ind, s.sys_ind][J] * s.sys_H'

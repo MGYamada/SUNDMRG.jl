@@ -39,12 +39,19 @@ abstract type Symmetry end
 
 Construct an SU(Nc) symmetry marker.
 
+`Nc` must be an integer greater than or equal to 2.
+
 Use it by multiplying with a model marker, either explicitly as
 `SU(3) * HeisenbergModel()` or with Julia's juxtaposition syntax:
 `SU(3)HeisenbergModel()`.
 """
 struct SU{Nc} <: Symmetry end
-SU(Nc) = SU{Nc}()
+
+function SU(Nc)
+    Nc isa Integer && !(Nc isa Bool) || throw(ArgumentError("Nc must be an integer"))
+    Nc >= 2 || throw(ArgumentError("Nc must be at least 2"))
+    return SU{_checked_int(Nc, "Nc")}()
+end
 
 abstract type SymmetricModel{S, M} <: Model where {S <: Symmetry, M <: Model} end
 
@@ -63,10 +70,15 @@ abstract type Lattice{D} end
     SquareLattice(Lx, Ly)
 
 Two-dimensional square lattice with `Lx` columns and `Ly` legs.
+
+Both extents must be positive integers.
 """
 struct SquareLattice <: Lattice{2}
     Lx::Int
     Ly::Int
+    function SquareLattice(Lx, Ly)
+        new(_positive_lattice_extent(Lx, "Lx"), _positive_lattice_extent(Ly, "Ly"))
+    end
 end
 
 """
@@ -74,17 +86,35 @@ end
 
 Two-dimensional honeycomb cylinder with zigzag-cylinder boundary condition.
 
-`Ly` must be even. `:ZC` is currently the only supported boundary condition.
+Both extents must be positive integers, and `Ly` must be even. `:ZC` is
+currently the only supported boundary condition.
 """
 struct HoneycombLattice <: Lattice{2}
     Lx::Int
     Ly::Int
     BC::Symbol
     function HoneycombLattice(Lx, Ly, BC)
+        Lx = _positive_lattice_extent(Lx, "Lx")
+        Ly = _positive_lattice_extent(Ly, "Ly")
         iseven(Ly) || throw(ArgumentError("Ly must be even for HoneycombLattice"))
         BC == :ZC || throw(ArgumentError("HoneycombLattice only supports BC = :ZC"))
         new(Lx, Ly, BC)
     end
+end
+
+function _checked_int(value::Integer, name)
+    try
+        return Int(value)
+    catch err
+        err isa InexactError || rethrow()
+        throw(ArgumentError("$name is outside the supported Int range"))
+    end
+end
+
+function _positive_lattice_extent(value, name)
+    value isa Integer && !(value isa Bool) || throw(ArgumentError("$name must be an integer"))
+    value > 0 || throw(ArgumentError("$name must be positive"))
+    return _checked_int(value, name)
 end
 
 abstract type Engine end

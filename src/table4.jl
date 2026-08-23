@@ -9,10 +9,12 @@ environment. It writes `table4half_SU\$(Nc)_\$(widthmax).jld2`.
 
 When `manage_mpi = true`, the function initializes MPI if needed and finalizes
 MPI only if it performed the initialization. Pass `manage_mpi = false` when MPI
-is managed by the caller.
+is managed by the caller. Owned MPI state is also finalized if generation fails.
 """
 function make_table4(Nc, widthmax; manage_mpi = true)
-    did_initialize_mpi = _init_table_mpi!(manage_mpi)
+    Nc, widthmax = _validate_table_parameters(Nc, widthmax)
+    manage_mpi isa Bool || throw(ArgumentError("manage_mpi must be true or false"))
+    return _with_table_mpi(manage_mpi) do
 
     comm = MPI.COMM_WORLD
     size = MPI.Comm_size(comm)
@@ -152,5 +154,6 @@ function make_table4(Nc, widthmax; manage_mpi = true)
         println("All finished!")
     end
 
-    _finalize_table_mpi!(did_initialize_mpi)
+    return nothing
+end
 end

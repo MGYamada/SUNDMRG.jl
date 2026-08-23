@@ -116,9 +116,25 @@ end
 @testset "Representation table MPI lifecycle helpers" begin
     RT = SUNDMRG.RepresentationTheory
 
+    @test RT._validate_table_parameters(3, 4) == (3, 4)
+    @test_throws ArgumentError RT._validate_table_parameters(1, 4)
+    @test_throws ArgumentError RT._validate_table_parameters(3.0, 4)
+    @test_throws ArgumentError RT._validate_table_parameters(3, -1)
+    @test_throws ArgumentError RT._validate_table_parameters(3, 4.0)
+
+    mpi_was_initialized = SUNDMRG.MPI.Initialized()
+    @test_throws ArgumentError RT.make_table3nu(:bad, 0)
+    @test_throws ArgumentError RT.make_table4(2, -1)
+    @test_throws ArgumentError RT.make_table3nu(2, 0; manage_mpi = :yes)
+    @test SUNDMRG.MPI.Initialized() == mpi_was_initialized
+
     SUNDMRG.MPI.Initialized() || SUNDMRG.MPI.Init(; threadlevel = SUNDMRG.MPI.THREAD_FUNNELED)
 
     @test RT._init_table_mpi!(false) == false
     @test RT._init_table_mpi!(true) == false
     @test RT._finalize_table_mpi!(false) == false
+    @test_throws ErrorException RT._with_table_mpi(false) do
+        error("intentional table-generation failure")
+    end
+    @test !SUNDMRG.MPI.Finalized()
 end

@@ -86,8 +86,9 @@ rank, dmrg = run_DMRG(
 ```
 
 GPU runs require CUDA and MAGMA to be configured before starting the calculation.
-For MPI GPU runs, the implementation expects the number of MPI ranks to be no
-larger than the number of available CUDA devices.
+For MPI GPU runs, each rank is mapped to a CUDA device using its node-local MPI
+rank. On every node, the number of MPI processes must not exceed the number of
+CUDA devices visible to each process.
 
 ## File-Backed Storage
 
@@ -124,6 +125,14 @@ The `alg` keyword controls the Lanczos vector reconstruction mode:
 - `alg = :fast`: cache Lanczos vectors and reuse them during reconstruction.
 
 The example scripts for larger SU(Nc) calculations use `alg = :fast`.
+
+`lanczos_maxiter` sets the maximum Krylov basis size and defaults to 100. It must
+be at least `target + 1`. Excited-state solves reorthogonalize the Krylov basis
+and start a new orthogonal chain when an exact starting eigenvector would
+otherwise stop the iteration too early. A requested level that is not available
+at an interior sweep cut raises an error instead of silently returning a lower
+level. The final wavefunction residual is checked after refinement, and a solve
+that remains unconverged also raises an error.
 
 ## Correlation Measurements
 

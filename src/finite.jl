@@ -1,5 +1,5 @@
-function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sweep_list, m_cooldown, engine; target = 0, widthmax = 0, tables = nothing, fileio = false, scratch = ".", ES_max = 20.0, tol_energy = 1e-5, tol_EE = 1e-3, correlation = :none, margin = 0, alg = :slow, verbose = true, manage_mpi = true) where Nc
-    _validate_run_DMRG_options(Val(Nc), target, widthmax, tables, fileio, tol_energy, tol_EE, margin, verbose, manage_mpi)
+function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sweep_list, m_cooldown, engine; target = 0, lanczos_maxiter = 100, widthmax = 0, tables = nothing, fileio = false, scratch = ".", ES_max = 20.0, tol_energy = 1e-5, tol_EE = 1e-3, max_cooldown_sweeps = 100, correlation = :none, margin = 0, alg = :slow, verbose = true, manage_mpi = true) where Nc
+    _validate_run_DMRG_options(Val(Nc), target, lanczos_maxiter, widthmax, tables, fileio, tol_energy, tol_EE, max_cooldown_sweeps, margin, verbose, manage_mpi)
     correlation ∈ (:none, :nn, :chain) || throw(ArgumentError("correlation must be :none, :nn, or :chain"))
     alg ∈ (:slow, :fast) || throw(ArgumentError("alg must be :slow or :fast"))
 
@@ -25,7 +25,7 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
         comm, rank, Ncpu = _comm_context()
         on_the_fly, mirror, γ_type, γ_list, N, signfactor = _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc, rank, Ncpu)
         runtime_initialized = true
-        config = _FiniteRunConfig(Val(lattice), Lx, Ly, N, Nc, m_warmup, m_sweep_list, m_cooldown, target, widthmax, tables, Val(fileio), scratch, ES_max, tol_energy, tol_EE, Val(correlation), margin, Val(alg), verbose)
+        config = _FiniteRunConfig(Val(lattice), Lx, Ly, N, Nc, m_warmup, m_sweep_list, m_cooldown, target, Int(lanczos_maxiter), widthmax, tables, Val(fileio), scratch, ES_max, tol_energy, tol_EE, Int(max_cooldown_sweeps), Val(correlation), margin, Val(alg), verbose)
         runtime = _FiniteRuntime(engine, comm, rank, Ncpu, on_the_fly, mirror, γ_type, γ_list, signfactor)
 
         return _run_DMRG_impl(config, runtime, runtime_finalized, Val(Nc))
@@ -39,13 +39,20 @@ function _run_DMRG(model::HeisenbergModelSU{Nc}, lattice, Lx, Ly, m_warmup, m_sw
     end
 end
 
-function _validate_run_DMRG_options(::Val{Nc}, target, widthmax, tables, fileio, tol_energy, tol_EE, margin, verbose, manage_mpi) where Nc
+function _validate_run_DMRG_options(::Val{Nc}, target, lanczos_maxiter, widthmax, tables, fileio, tol_energy, tol_EE, max_cooldown_sweeps, margin, verbose, manage_mpi) where Nc
+    Nc isa Integer && !(Nc isa Bool) || throw(ArgumentError("Nc must be an integer"))
+    Nc >= 2 || throw(ArgumentError("Nc must be at least 2"))
     target isa Integer || throw(ArgumentError("target must be an integer"))
     target >= 0 || throw(ArgumentError("target must be nonnegative"))
+    lanczos_maxiter isa Integer && !(lanczos_maxiter isa Bool) || throw(ArgumentError("lanczos_maxiter must be an integer"))
+    lanczos_maxiter > 0 || throw(ArgumentError("lanczos_maxiter must be positive"))
+    target + 1 <= lanczos_maxiter || throw(ArgumentError("target + 1 must not exceed lanczos_maxiter"))
     widthmax isa Integer || throw(ArgumentError("widthmax must be an integer"))
     widthmax >= 0 || throw(ArgumentError("widthmax must be nonnegative"))
     margin isa Integer || throw(ArgumentError("margin must be an integer"))
     margin >= 0 || throw(ArgumentError("margin must be nonnegative"))
+    max_cooldown_sweeps isa Integer || throw(ArgumentError("max_cooldown_sweeps must be an integer"))
+    max_cooldown_sweeps > 0 || throw(ArgumentError("max_cooldown_sweeps must be positive"))
     fileio isa Bool || throw(ArgumentError("fileio must be true or false"))
     verbose isa Bool || throw(ArgumentError("verbose must be true or false"))
     manage_mpi isa Bool || throw(ArgumentError("manage_mpi must be true or false"))

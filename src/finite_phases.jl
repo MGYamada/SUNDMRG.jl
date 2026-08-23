@@ -386,38 +386,45 @@ function _growth_phase!(state::_FiniteState{Nc}, config::_FiniteRunConfig, runti
     return _GrowthState(L, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls)
 end
 
+function _run_sweep_pass!(SiSj, state, EE, ES, m_list, errors, energies, EEs, storage, L, m, measurement, config::_FiniteRunConfig, runtime::_FiniteRuntime, ::Val{Nc}) where Nc
+    if config.verbose
+        root_println(runtime, "#")
+        if measurement
+            root_println(runtime, "# Measurement step with (m, α) = ", m)
+        else
+            root_println(runtime, "# Performing sweep with (m, α) = ", m)
+        end
+        root_println(runtime, "#")
+    end
+
+    while true
+        result = _sweep_step!(SiSj, state, EE, storage, L, m, measurement, config, runtime, Val(Nc))
+        if state.sys_label == :l && 2state.sys_block.length == L
+            return _record_step_result!(m_list, errors, energies, EEs, m, result)
+        end
+    end
+end
+
 function _sweep_phase!(SiSj, Ψ, EE, ES, m_list, errors, energies, EEs, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, storage, L, config::_FiniteRunConfig, runtime::_FiniteRuntime)
-    (; Nc, m_sweep_list, m_cooldown, verbose) = config
-    (; rank) = runtime
+    (; Nc, m_sweep_list, m_cooldown, max_cooldown_sweeps) = config
 
     state = _init_sweep_state(Ψ, sys_blocks, sys_tensor_dicts, sys_trmats, sys_block_enls, storage, L, config, runtime, Val(Nc))
-    measurement = false
 
-    for m in Iterators.flatten([m_sweep_list, Iterators.repeated(m_cooldown)])
-        if verbose
-            root_println(runtime, "#")
-            if measurement
-                root_println(runtime, "# Measurement step with (m, α) = ", m)
-            else
-                root_println(runtime, "# Performing sweep with (m, α) = ", m)
-            end
-            root_println(runtime, "#")
-        end
-        while true
-            result = _sweep_step!(SiSj, state, EE, storage, L, m, measurement, config, runtime, Val(Nc))
+    for m in m_sweep_list
+        ES = _run_sweep_pass!(SiSj, state, EE, ES, m_list, errors, energies, EEs, storage, L, m, false, config, runtime, Val(Nc))
+    end
 
-            if state.sys_label == :l && 2state.sys_block.length == L
-                ES = _record_step_result!(m_list, errors, energies, EEs, m, result)
-                break
-            end
-        end
-
-        if measurement
+    converged = false
+    for _ in 1 : max_cooldown_sweeps
+        ES = _run_sweep_pass!(SiSj, state, EE, ES, m_list, errors, energies, EEs, storage, L, m_cooldown, false, config, runtime, Val(Nc))
+        if _update_measurement_flag(false, energies, EEs, config, runtime)
+            converged = true
             break
         end
-
-        measurement = _update_measurement_flag(measurement, energies, EEs, config, runtime)
     end
+
+    converged || throw(ErrorException("DMRG did not converge within $max_cooldown_sweeps cooldown sweeps"))
+    ES = _run_sweep_pass!(SiSj, state, EE, ES, m_list, errors, energies, EEs, storage, L, m_cooldown, true, config, runtime, Val(Nc))
 
     return ES, EE
 end

@@ -13,16 +13,16 @@ function dmrg_step!(
     (; blocks, schedule, options) = request
     (; sys_label, sys, env, sys_tensor_dict, env_tensor_dict, sys_enl, env_enl) = blocks
     (; m, α) = schedule
-    (; Ly, widthmax, target, signfactor, tables, on_the_fly, γ_list, alg, lattice) = settings
+    (; Ly, widthmax, target, lanczos_maxiter, signfactor, tables, on_the_fly, γ_list, alg, lattice) = settings
     (; comm, rank, Ncpu, engine) = runtime
-    (; Ψ0_guess, ES_max, correlation, margin, noisy) = options
+    (; Ψ0_guess, ES_max, correlation, margin, noisy, require_target) = options
     Sj = options.Sj
 
     workspace = _prepare_step_workspace(sys, env, sys_tensor_dict, env_tensor_dict, sys_enl, env_enl, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, γ_list, engine, lattice, Val(Nc))
     (; sys_αs, env_αs, sys_βs, env_βs, sys_ms, env_ms, sys_len, env_len, superblock_bonds, bonds_hold, x_conn, y_conn, sys_dp, env_dp, sys_enlarge, env_enlarge, OM, superblock_H1, superblock_H2, sys_connS, env_connS, sys_tensor_dict_hold, env_tensor_dict_hold) = workspace
 
     Ψ0 = _initial_step_wavefunction(Ψ0_guess, env_ms, sys_ms, OM, Ncpu, rank, engine)
-    lanczos_context = _StepLanczosContext(target, comm, rank, engine, alg, superblock_H1, bonds_hold, x_conn, y_conn, sys_connS, env_connS, sys_ms, env_ms, sys_βs, env_βs, sys_dp, env_dp, sys_enlarge, env_enlarge, sys_tensor_dict_hold, env_tensor_dict_hold, superblock_H2, OM, sys_len, env_len, Ncpu)
+    lanczos_context = _StepLanczosContext(target, lanczos_maxiter, require_target, comm, rank, engine, alg, superblock_H1, bonds_hold, x_conn, y_conn, sys_connS, env_connS, sys_ms, env_ms, sys_βs, env_βs, sys_dp, env_dp, sys_enlarge, env_enlarge, sys_tensor_dict_hold, env_tensor_dict_hold, superblock_H2, OM, sys_len, env_len, Ncpu)
     E, time_Lanczos = _run_step_lanczos!(Ψ0, lanczos_context)
     energy = _step_energy(E, time_Lanczos, sys_enl, env_enl, superblock_bonds, comm, rank, noisy, Val(Nc))
     density_context = _StepDensityContext(comm, rank, Ncpu, engine, α, m, ES_max, noisy)
@@ -156,12 +156,14 @@ function dmrg_step!(
     Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0),
     alg = :slow,
     noisy = true,
+    lanczos_maxiter = 100,
+    require_target = false,
 ) where {Nc, env_calc}
     blocks = _DMRGStepBlocks(sys_label, sys, env, sys_tensor_dict, env_tensor_dict, sys_enl, env_enl)
     schedule = _DMRGStepSchedule(m, α)
-    settings = _DMRGStepSettings(Ly, widthmax, target, signfactor, tables, on_the_fly, γ_list, alg, lattice)
+    settings = _DMRGStepSettings(Ly, widthmax, target, lanczos_maxiter, signfactor, tables, on_the_fly, γ_list, alg, lattice)
     runtime = _DMRGStepRuntime(comm, rank, Ncpu, engine)
-    options = _DMRGStepOptions(Ψ0_guess, ES_max, correlation, margin, Sj, noisy)
+    options = _DMRGStepOptions(Ψ0_guess, ES_max, correlation, margin, Sj, noisy, require_target)
     request = _DMRGStepRequest(blocks, schedule, options, Val(env_calc))
     return dmrg_step!(SiSj, request, settings, runtime, Val(Nc))
 end

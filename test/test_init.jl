@@ -1,10 +1,17 @@
 @testset "Model/lattice/engine initialization" begin
     model = SUNDMRG.SU(2) * SUNDMRG.HeisenbergModel()
     @test model isa SUNDMRG.HeisenbergModelSU{2}
+    @test_throws ArgumentError SUNDMRG.SU(1)
+    @test_throws ArgumentError SUNDMRG.SU(2.0)
+    @test_throws ArgumentError SUNDMRG.SU(true)
 
     sq = SUNDMRG.SquareLattice(4, 2)
     @test sq.Lx == 4
     @test sq.Ly == 2
+    @test_throws ArgumentError SUNDMRG.SquareLattice(0, 2)
+    @test_throws ArgumentError SUNDMRG.SquareLattice(2, -1)
+    @test_throws ArgumentError SUNDMRG.SquareLattice(2.0, 2)
+    @test_throws ArgumentError SUNDMRG.SquareLattice(true, 2)
 
     hc = SUNDMRG.HoneycombLattice(4, 2, :ZC)
     @test hc.Lx == 4
@@ -13,6 +20,9 @@
 
     @test_throws ArgumentError SUNDMRG.HoneycombLattice(4, 3, :ZC)
     @test_throws ArgumentError SUNDMRG.HoneycombLattice(4, 2, :PBC)
+    @test_throws ArgumentError SUNDMRG.HoneycombLattice(0, 2, :ZC)
+    @test_throws ArgumentError SUNDMRG.HoneycombLattice(4, 0, :ZC)
+    @test_throws ArgumentError SUNDMRG.HoneycombLattice(4.0, 2, :ZC)
 
     left = (length = 2,)
     right = (length = 3,)
@@ -51,6 +61,9 @@ end
     @test signfactor == -1.0
 
     @test_throws ArgumentError SUNDMRG._init_runtime_and_engine(SUNDMRG.CPUEngine, :square, 4, 4, 1, 0, 1)
+    @test_throws ArgumentError SUNDMRG._init_runtime_and_engine(SUNDMRG.CPUEngine, :square, 4, 4, 2.0, 0, 1)
+    @test_throws ArgumentError SUNDMRG._init_runtime_and_engine(SUNDMRG.CPUEngine, :square, 0, 4, 2, 0, 1)
+    @test_throws ArgumentError SUNDMRG._init_runtime_and_engine(SUNDMRG.CPUEngine, :square, 4, 0, 2, 0, 1)
     @test_throws ArgumentError SUNDMRG._init_runtime_and_engine(SUNDMRG.CPUEngine, :triangular, 4, 4, 2, 0, 1)
     @test_throws ArgumentError SUNDMRG._init_runtime_and_engine(SUNDMRG.CPUEngine, :square, 4, 4, 3, 0, 1)
     @test_throws ArgumentError SUNDMRG._init_runtime_and_engine(SUNDMRG.CPUEngine, :square, 4, 3, 4, 0, 1)

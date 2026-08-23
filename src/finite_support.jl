@@ -17,9 +17,9 @@ function _dmrg_step_blocks(sys_label, sys, env, sys_tensor_dict, env_tensor_dict
 end
 
 function _dmrg_step_settings(config::_FiniteRunConfig, runtime::_FiniteRuntime)
-    (; Ly, widthmax, target, tables, alg, lattice) = config
+    (; Ly, widthmax, target, lanczos_maxiter, tables, alg, lattice) = config
     (; signfactor, on_the_fly, γ_list) = runtime
-    _DMRGStepSettings(Ly, widthmax, target, signfactor, tables, on_the_fly, γ_list, alg, lattice)
+    _DMRGStepSettings(Ly, widthmax, target, lanczos_maxiter, signfactor, tables, on_the_fly, γ_list, alg, lattice)
 end
 
 function _dmrg_step_runtime(runtime::_FiniteRuntime)
@@ -37,9 +37,10 @@ function _dmrg_step_request(
     margin = 0,
     Sj = Matrix{Vector{Matrix{Float64}}}(undef, 0, 0),
     noisy = true,
+    require_target = false,
 ) where env_calc
     m, α = schedule
-    options = _DMRGStepOptions(Ψ0_guess, ES_max, correlation, margin, Sj, noisy)
+    options = _DMRGStepOptions(Ψ0_guess, ES_max, correlation, margin, Sj, noisy, require_target)
     _DMRGStepRequest(blocks, _DMRGStepSchedule(m, α), options, Val(env_calc))
 end
 

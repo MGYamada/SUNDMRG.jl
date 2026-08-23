@@ -129,6 +129,7 @@ end
         margin = 2,
         Sj = :sj,
         noisy = false,
+        require_target = true,
     )
     @test request isa SUNDMRG._DMRGStepRequest{true}
     @test request.blocks === blocks
@@ -140,6 +141,7 @@ end
     @test request.options.margin == 2
     @test request.options.Sj == :sj
     @test request.options.noisy == false
+    @test request.options.require_target == true
 end
 
 @testset "Density matrix balancer helper" begin
@@ -172,4 +174,8 @@ end
     @test isempty(msnew)
     @test isempty(Hnew)
     @test isempty(indices)
+
+    @test SUNDMRG._density_keep_indices([[0.5, 0.5]], 1) == [[false, true]]
+    @test SUNDMRG._density_keep_indices([[0.5], [0.5]], 1) == [[true], [false]]
+    @test SUNDMRG._density_keep_indices([[0.1, 0.2], [0.3]], 10) == [[true, true], [true]]
 end

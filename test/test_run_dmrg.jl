@@ -2,10 +2,15 @@
     @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; correlation = :bad)
     @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; alg = :bad)
     @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; target = -1)
+    @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; lanczos_maxiter = 0)
+    @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; lanczos_maxiter = 1.5)
+    @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; target = 1, lanczos_maxiter = 1)
     @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; widthmax = -1)
     @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; margin = -1)
     @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; tol_energy = 0.0)
     @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; tol_EE = NaN)
+    @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; max_cooldown_sweeps = 0)
+    @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; max_cooldown_sweeps = 1.5)
     @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; fileio = :yes)
     @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; verbose = :yes)
     @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; manage_mpi = :yes)
@@ -48,6 +53,17 @@
             @test last(dmrg_fast.energies) ≈ -3.2320508075688767 atol = 1e-12
             @test isempty(dmrg_fast.SiSj)
         end
+
+        rank_excited, dmrg_excited = run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; target = 1, lanczos_maxiter = 2, verbose = false, manage_mpi = false)
+
+        @test rank_excited == 0
+        if rank_excited == 0
+            @test length(dmrg_excited.energies) == 4
+            @test last(dmrg_excited.energies) ≈ 0.2320508075688773 atol = 1e-12
+            @test last(dmrg_excited.energies) > last(dmrg_fast.energies)
+        end
+
+        @test_throws ArgumentError run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; target = 2, verbose = false, manage_mpi = false)
 
         rank_nn, dmrg_nn = run_DMRG(SU(2)HeisenbergModel(), SquareLattice(2, 2), 20, [20], 20, CPUEngine; correlation = :nn, verbose = false, manage_mpi = false)
 
