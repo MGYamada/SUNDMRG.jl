@@ -1,5 +1,6 @@
 using LinearAlgebra
 using MPI
+using Random
 
 MPI.Initialized() || MPI.Init()
 
@@ -47,6 +48,12 @@ MPI.Initialized() || MPI.Init()
     for I in eachindex(dest), J in eachindex(dest[I])
         @test iszero(dest[I][J])
     end
+
+    abstract_eltype = Matrix{Vector}(undef, 1, 1)
+    abstract_eltype[1, 1] = [reshape([1.0, 2.0], 2, 1)]
+    @test SUNDMRG.mydot(abstract_eltype, abstract_eltype) == 5.0
+    SUNDMRG.myzero!(abstract_eltype)
+    @test iszero(only(only(abstract_eltype)))
 end
 
 @testset "Lanczos clears output before applying accumulating operator" begin
@@ -61,4 +68,64 @@ end
 
     val = SUNDMRG.Lanczos!(accumulating_A!, initial, 1, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 4, alg = :slow)
     @test val ≈ 1.0 atol = 1e-12
+end
+
+@testset "Lanczos resolves distinct excited states" begin
+    H = Diagonal([1.0, 2.0, 3.0])
+
+    function diagonal_fixture()
+        initial = Matrix{Vector{Matrix{Float64}}}(undef, 1, 1)
+        initial[1, 1] = [reshape(ones(3), 3, 1)]
+        return initial
+    end
+
+    function diagonal_A!(out, input)
+        out[1, 1][1] .+= H * input[1, 1][1]
+        return out
+    end
+
+    for alg in (:slow, :fast), position in 1 : 3
+        initial = diagonal_fixture()
+        val = SUNDMRG.Lanczos!(diagonal_A!, initial, position, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 3, alg = alg)
+        @test val ≈ Float64(position) atol = 1e-12
+        expected = zeros(3)
+        expected[position] = 1.0
+        @test abs.(vec(initial[1, 1][1])) ≈ expected atol = 1e-10
+    end
+
+    initial_eigenvector = diagonal_fixture()
+    initial_eigenvector[1, 1][1] .= reshape([1.0, 0.0, 0.0], 3, 1)
+    restarted_val = SUNDMRG.Lanczos!(diagonal_A!, initial_eigenvector, 2, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 3)
+    @test restarted_val ≈ 2.0 atol = 1e-12
+
+    @test_throws ArgumentError SUNDMRG.Lanczos!(diagonal_A!, diagonal_fixture(), 4, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 3)
+    @test_throws ArgumentError SUNDMRG.Lanczos!(diagonal_A!, diagonal_fixture(), 4, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 4)
+    @test_throws ArgumentError SUNDMRG.Lanczos!(diagonal_A!, diagonal_fixture(), 0, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 3)
+    @test_throws ArgumentError SUNDMRG.Lanczos!(diagonal_A!, diagonal_fixture(), 1, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 0)
+    @test_throws ArgumentError SUNDMRG.Lanczos!(diagonal_A!, diagonal_fixture(), 1, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 3, allow_fewer = :yes)
+
+    initial = diagonal_fixture()
+    val = SUNDMRG.Lanczos!(diagonal_A!, initial, 4, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 4, allow_fewer = true)
+    @test val ≈ 3.0 atol = 1e-12
+end
+
+@testset "Lanczos reports nonconvergence" begin
+    rng = MersenneTwister(17)
+    matrix = randn(rng, 30, 30)
+    H = Symmetric(2.0 .* matrix)
+    initial = Matrix{Vector{Matrix{Float64}}}(undef, 1, 1)
+    initial[1, 1] = [reshape(randn(rng, 30), 30, 1)]
+
+    function random_A!(out, input)
+        out[1, 1][1] .+= H * input[1, 1][1]
+        return out
+    end
+
+    @test_throws ErrorException SUNDMRG.Lanczos!(random_A!, initial, 1, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 1)
+end
+
+@testset "Node-local MPI context" begin
+    local_rank, local_size = SUNDMRG._node_local_mpi_context(MPI.COMM_WORLD, MPI.Comm_rank(MPI.COMM_WORLD))
+    @test 0 <= local_rank < local_size
+    @test 1 <= local_size <= MPI.Comm_size(MPI.COMM_WORLD)
 end

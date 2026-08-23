@@ -10,6 +10,7 @@ This function does not require MPI. It reads
 `table_SU\$(Nc)_\$(widthmax).jld2`.
 """
 function make_table(Nc, widthmax)
+    Nc, widthmax = _validate_table_parameters(Nc, widthmax)
     @load "table4half_SU$(Nc)_$widthmax.jld2" table4
     @load "table3nuhalf_SU$(Nc)_$widthmax.jld2" table_3ν
     tables = table_9ν(Nc, widthmax, table4, table_3ν)

@@ -73,7 +73,10 @@ end
 root_println(runtime::_FiniteRuntime, args...) = root_println(runtime.rank, args...)
 
 function _init_runtime_and_engine(engine, lattice, Lx, Ly, Nc, rank, Ncpu)
+    Nc isa Integer && !(Nc isa Bool) || throw(ArgumentError("Nc must be an integer"))
     Nc >= 2 || throw(ArgumentError("Nc must be at least 2"))
+    Lx = _positive_lattice_extent(Lx, "Lx")
+    Ly = _positive_lattice_extent(Ly, "Ly")
 
     on_the_fly = Nc == 2
     mirror = lattice == :square || lattice == :honeycombZC
@@ -106,11 +109,21 @@ end
 _init_engine_runtime!(::Type{<:CPUEngine}, rank, Ncpu) = nothing
 
 function _init_engine_runtime!(::Type{<:GPUEngine}, rank, Ncpu)
+    local_rank, local_size = _node_local_mpi_context(MPI.COMM_WORLD, rank)
     Ngpu = Int(length(devices()))
-    Ncpu <= Ngpu || throw(ArgumentError("Ncpu must be less than or equal to the number of GPUs"))
-    device!(rank)
+    local_size <= Ngpu || throw(ArgumentError("the number of MPI processes on this node ($local_size) must not exceed the number of visible GPUs ($Ngpu)"))
+    device!(local_rank)
     magma_init()
     return nothing
+end
+
+function _node_local_mpi_context(comm, rank)
+    local_comm = MPI.Comm_split_type(comm, MPI.COMM_TYPE_SHARED, rank)
+    try
+        return MPI.Comm_rank(local_comm), MPI.Comm_size(local_comm)
+    finally
+        MPI.free(local_comm)
+    end
 end
 
 _finalize_engine_runtime!(::Type{<:CPUEngine}) = nothing

@@ -44,6 +44,20 @@ runs.
 """
 const RepresentationTable = NTuple{6, Any}
 
+function _validate_table_parameters(Nc, widthmax)
+    Nc isa Integer && !(Nc isa Bool) || throw(ArgumentError("Nc must be an integer"))
+    Nc >= 2 || throw(ArgumentError("Nc must be at least 2"))
+    widthmax isa Integer && !(widthmax isa Bool) || throw(ArgumentError("widthmax must be an integer"))
+    widthmax >= 0 || throw(ArgumentError("widthmax must be nonnegative"))
+
+    try
+        return Int(Nc), Int(widthmax)
+    catch err
+        err isa InexactError || rethrow()
+        throw(ArgumentError("Nc and widthmax must fit in Int"))
+    end
+end
+
 function _init_table_mpi!(manage_mpi::Bool)
     if !manage_mpi
         (MPI.Initialized() && !MPI.Finalized()) || throw(ArgumentError("MPI must be initialized when manage_mpi = false"))
@@ -65,6 +79,15 @@ function _finalize_table_mpi!(did_initialize::Bool)
         return true
     end
     return false
+end
+
+function _with_table_mpi(f::Function, manage_mpi::Bool)
+    did_initialize_mpi = _init_table_mpi!(manage_mpi)
+    try
+        return f()
+    finally
+        _finalize_table_mpi!(did_initialize_mpi)
+    end
 end
 
 include("sparsevec2.jl")

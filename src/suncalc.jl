@@ -126,6 +126,7 @@ function racahU(ν1::SUNIrrep{Nc}, ν2::SUNIrrep{Nc}, ν::SUNIrrep{Nc}, ν3::SUN
             return reshape([convert(Float64, signedroot((μ12 + 1) * (μ23 + 1)) * racahW(j1, j2, j, j3, j12, j23))], 1, 1, 1, 1)
         end
     end
+    throw(ArgumentError("on-the-fly wigner6ν is implemented only for SU(2); use precomputed tables for SU(N > 2)"))
 end
 
 """

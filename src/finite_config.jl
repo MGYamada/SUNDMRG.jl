@@ -10,6 +10,7 @@ struct _FiniteRunConfig{L,T,F,S,C,A}
     m_sweep_list::Vector{_DMRGSchedule}
     m_cooldown::_DMRGSchedule
     target::Int
+    lanczos_maxiter::Int
     widthmax::Int
     tables::T
     fileio::Val{F}
@@ -17,6 +18,7 @@ struct _FiniteRunConfig{L,T,F,S,C,A}
     ES_max::Float64
     tol_energy::Float64
     tol_EE::Float64
+    max_cooldown_sweeps::Int
     correlation::C
     margin::Int
     alg::A

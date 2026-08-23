@@ -72,6 +72,7 @@ struct _DMRGStepSettings{TablesT,OnTheFlyT,GammaT,AlgT,LatticeT}
     Ly::Int
     widthmax::Int
     target::Int
+    lanczos_maxiter::Int
     signfactor::Float64
     tables::TablesT
     on_the_fly::OnTheFlyT
@@ -94,6 +95,7 @@ struct _DMRGStepOptions{GuessT,CorrelationT,SjT}
     margin::Int
     Sj::SjT
     noisy::Bool
+    require_target::Bool
 end
 
 struct _DMRGStepRequest{EnvCalc,BlocksT,ScheduleT,OptionsT}
@@ -118,6 +120,8 @@ end
 
 struct _StepLanczosContext{CommT,E,A,H1,BondsT,SysConnT,EnvConnT,MST,BetaT,DPT,EnlargeT,SysTensorT,EnvTensorT,H2T,OMT}
     target::Int
+    maxiter::Int
+    require_target::Bool
     comm::CommT
     rank::Int
     engine::Type{E}

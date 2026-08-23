@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.5.7
+
+### Fixed
+
+- Fixed excited-state Lanczos solves by fully reorthogonalizing their Krylov basis and using Ritz residual convergence, while preserving the lower-memory ground-state path.
+- Made Lanczos nested-array helpers accept the abstract vector element types produced by Julia 1.10 DMRG workspaces.
+- Validated Lanczos target positions and iteration limits, handled numerical breakdown with a tolerance, and restarted orthogonal Krylov chains when an exact initial eigenvector would otherwise hide later levels.
+- Made unavailable Lanczos target levels and unconverged refined wavefunctions raise explicit errors instead of silently returning a lower or unchecked result.
+- Made finite-sweep convergence safe when energy or entanglement entropy is zero and bounded cooldown work with `max_cooldown_sweeps`.
+- Kept exactly the requested number of density-matrix multiplets when eigenvalues are tied at the truncation cutoff.
+- Made unsupported on-the-fly SU(N > 2) 6ν calculations raise a clear `ArgumentError`.
+- Corrected coefficient-table documentation so sequential MPI builders share one MPI lifecycle.
+- Validated SU(Nc), square-lattice, honeycomb-lattice, and coefficient-table dimensions before runtime initialization.
+- Made MPI-owned coefficient-table generation finalize MPI on exceptional exits.
+- Assigned CUDA devices by node-local MPI rank and validated the per-node process count.
+
+### Changed
+
+- Bumped the package version to v1.5.7 and set the minimum supported Julia version to 1.10, matching SUNRepresentations 0.3.
+- Added CI coverage for both Julia 1.10 and the latest Julia 1.x release.
+- Added compatibility bounds for every runtime dependency and pinned the MAGMA.jl revision used by CI and installation documentation.
+- Added the `lanczos_maxiter` runtime keyword, with a default of 100.
+
+### Tests
+
+- Added regressions for distinct and restarted Lanczos excited states, unavailable targets, explicit nonconvergence, invalid dimensions and iteration bounds, MPI table lifecycle errors, node-local MPI context, zero-valued convergence data, tied density eigenvalues, cooldown validation, and unsupported SU(3) 6ν evaluation.
+
 ## v1.5.6
 
 ### Changed

@@ -151,9 +151,7 @@ function _density_truncation_basis(λ, ζ, side::_StepSideContext, dimβ, sys_en
                 end
             end
         end
-        Λ = sort!(collect(Iterators.flatten(reverse.(λ))), rev = true)
-        λthreshold = m < length(Λ) ? Λ[m + 1] : -Inf
-        indices = map(x -> x .> λthreshold, λ)
+        indices = _density_keep_indices(λ, m)
         transformation_matrix = map(x -> to_engine_array(engine, x[1][:, x[2]]), zip(ζ, indices))
 
         msnew = map(x -> size(x, 2), transformation_matrix)
@@ -166,6 +164,20 @@ function _density_truncation_basis(λ, ζ, side::_StepSideContext, dimβ, sys_en
 
     transformation_matrix = [engine_matrix_type(engine)(undef, 0, 0)]
     return 0.0, esi, transformation_matrix, Int[], Matrix{Float64}[], Vector{Bool}[]
+end
+
+function _density_keep_indices(λ, m)
+    indices = [falses(length(sector)) for sector in λ]
+    candidates = Tuple{Float64, Int, Int}[]
+    for (sector_index, sector) in pairs(λ), state_index in eachindex(sector)
+        push!(candidates, (Float64(sector[state_index]), sector_index, state_index))
+    end
+
+    sort!(candidates; by = candidate -> (-candidate[1], candidate[2], -candidate[3]))
+    for (_, sector_index, state_index) in Iterators.take(candidates, min(m, length(candidates)))
+        indices[sector_index][state_index] = true
+    end
+    return indices
 end
 
 function _apply_density_matrix_correction!(ρs, switch, side::_StepSideContext, density_context::_StepDensityContext, correction_context::_StepCorrectionContext)

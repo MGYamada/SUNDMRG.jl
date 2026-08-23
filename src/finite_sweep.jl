@@ -87,7 +87,8 @@ function _sweep_step!(SiSj, state::_SweepState, EE, storage, L, m, measurement, 
 
     cor = measurement && (state.sys_label == :r || state.sys_block.length == 0) ? correlation : Val(:none)
     blocks = _dmrg_step_blocks(state.sys_label, state.sys_block, state.env_block, state.sys_tensor_dict, state.env_tensor_dict, state.sys_block_enl, state.env_block_enl)
-    request = _dmrg_step_request(blocks, m, Val(false); Ψ0_guess = Ψ0_guess, ES_max = ES_max, correlation = cor, margin = margin, Sj = state.Sj, noisy = verbose)
+    require_target = state.sys_block.length > 0 && state.env_block.length > 0
+    request = _dmrg_step_request(blocks, m, Val(false); Ψ0_guess = Ψ0_guess, ES_max = ES_max, correlation = cor, margin = margin, Sj = state.Sj, noisy = verbose, require_target = require_target)
     result = dmrg_step_result!(SiSj, request, config, runtime, Val(Nc))
     state.sys_block = result.block
     state.sys_tensor_dict = result.tensor_dict
@@ -120,9 +121,15 @@ function _update_measurement_flag(measurement, energies, EEs, config::_FiniteRun
     end
 
     if isroot(runtime)
-        measurement = abs((energies[end] - energies[end - 1]) / energies[end]) < tol_energy && abs((EEs[end] - EEs[end - 1]) / EEs[end]) < tol_EE
+        measurement = _relative_change_converged(energies[end], energies[end - 1], tol_energy) && _relative_change_converged(EEs[end], EEs[end - 1], tol_EE)
         return MPI.bcast(measurement, 0, comm)::Bool
     end
 
     return MPI.bcast(nothing, 0, comm)::Bool
+end
+
+function _relative_change_converged(current, previous, tolerance)
+    isfinite(current) && isfinite(previous) || return false
+    scale = max(abs(current), abs(previous), eps(Float64))
+    return abs(current - previous) <= tolerance * scale
 end
