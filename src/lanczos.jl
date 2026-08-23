@@ -1,7 +1,7 @@
 const tol_wavefunction = 1e-13
 const tol_Lanczos = 1e-13
 
-MyMatrix = Matrix{<:Vector{<:AbstractMatrix{Float64}}}
+const MyMatrix = Matrix{<:AbstractVector}
 
 function mydot(x::MyMatrix, y::MyMatrix)
     s = 0.0

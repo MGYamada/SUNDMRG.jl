@@ -48,6 +48,12 @@ MPI.Initialized() || MPI.Init()
     for I in eachindex(dest), J in eachindex(dest[I])
         @test iszero(dest[I][J])
     end
+
+    abstract_eltype = Matrix{Vector}(undef, 1, 1)
+    abstract_eltype[1, 1] = [reshape([1.0, 2.0], 2, 1)]
+    @test SUNDMRG.mydot(abstract_eltype, abstract_eltype) == 5.0
+    SUNDMRG.myzero!(abstract_eltype)
+    @test iszero(only(only(abstract_eltype)))
 end
 
 @testset "Lanczos clears output before applying accumulating operator" begin

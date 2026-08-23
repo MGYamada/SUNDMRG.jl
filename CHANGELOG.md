@@ -5,6 +5,7 @@
 ### Fixed
 
 - Fixed excited-state Lanczos solves by fully reorthogonalizing their Krylov basis and using Ritz residual convergence, while preserving the lower-memory ground-state path.
+- Made Lanczos nested-array helpers accept the abstract vector element types produced by Julia 1.10 DMRG workspaces.
 - Validated Lanczos target positions and iteration limits, handled numerical breakdown with a tolerance, and restarted orthogonal Krylov chains when an exact initial eigenvector would otherwise hide later levels.
 - Made unavailable Lanczos target levels and unconverged refined wavefunctions raise explicit errors instead of silently returning a lower or unchecked result.
 - Made finite-sweep convergence safe when energy or entanglement entropy is zero and bounded cooldown work with `max_cooldown_sweeps`.
