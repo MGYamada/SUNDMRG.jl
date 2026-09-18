@@ -17,13 +17,14 @@ function _load_sweep_env(storage, env_label, env_len, config::_FiniteRunConfig, 
     (; lattice, Ly, widthmax, tables) = config
     (; engine, comm, rank, Ncpu, on_the_fly, γ_type, signfactor) = runtime
 
-    if isroot(runtime)
-        env_block, env_trmat = load_block_and_trmat(storage, env_label, env_len, engine, Val(Nc))
-        env_tensor_dict = spin_operators!(storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
-    else
-        env_block = Block(env_len, Tuple{Int, Int}[], γ_type[], Int[], Int[], Dict{Symbol, Vector{Matrix{Float64}}}())
-        env_tensor_dict = empty_engine_tensor_dict(engine)
-        env_trmat = empty_engine_matrix_vector(engine)
+    env_block, env_tensor_dict, env_trmat = _collective_local(runtime, "sweep environment input") do
+        if isroot(runtime)
+            env_block, env_trmat = load_block_and_trmat(storage, env_label, env_len, engine, Val(Nc))
+            env_tensor_dict = spin_operators!(storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
+            (env_block, env_tensor_dict, env_trmat)
+        else
+            _worker_empty_environment(env_len, γ_type, engine)
+        end
     end
 
     env_block_enl = enlarge_block(env_block, env_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
@@ -97,16 +98,18 @@ function _sweep_step!(SiSj, state::_SweepState, EE, storage, L, m, measurement, 
     state.sys_trmat = result.trmat
     state.Sj = result.Sj
 
-    if isroot(runtime)
-        if state.sys_label == :r && state.env_block_enl.length % Ly == 0
-            EE[state.env_block_enl.length ÷ Ly] = result.ee
+    _collective_local(runtime, "sweep block output") do
+        if isroot(runtime)
+            if state.sys_label == :r && state.env_block_enl.length % Ly == 0
+                EE[state.env_block_enl.length ÷ Ly] = result.ee
+            end
+            if verbose
+                root_println(runtime, "E / N = ", result.energy / L)
+                root_println(runtime, "E     = ", result.energy)
+                root_println(runtime, "S_EE  = ", result.ee)
+            end
+            save_block_and_trmat!(storage, state.sys_label, state.sys_block, state.sys_trmat)
         end
-        if verbose
-            root_println(runtime, "E / N = ", result.energy / L)
-            root_println(runtime, "E     = ", result.energy)
-            root_println(runtime, "S_EE  = ", result.ee)
-        end
-        save_block_and_trmat!(storage, state.sys_label, state.sys_block, state.sys_trmat)
     end
 
     return result

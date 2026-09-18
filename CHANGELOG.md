@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.5.8 (Unreleased)
+
+### Fixed
+
+- Fixed excited-state eigenvalue ordering for clustered and degenerate spectra with a bounded block Krylov basis and direct residual checks for all levels through the target. Independent starting directions also handle exact eigenvector guesses and guesses orthogonal to a degenerate low-energy space.
+- Retained an already-converged wavefunction prediction after validating its target eigenvalue, preventing arbitrary rotations within a degenerate eigenspace from disrupting entanglement-entropy convergence.
+- Protected temporary storage from the moment it is acquired, including failures during initial block construction or output, and made removal of an already-deleted temporary directory harmless.
+- Separated storage, engine, and MPI cleanup so every acquired resource is released once even when an earlier cleanup fails. Simultaneous calculation and cleanup failures retain both exceptions and backtraces, with secondary cleanup details logged.
+- Preserved caller-owned MPI across repeated DMRG and coefficient-table runs, and finalized package-owned MPI after initialization-hook failures. Checked MAGMA initialization/finalization status codes and rolled back references acquired by failed initialization.
+- Propagated rank-local validation, initialization, internal-storage, result-construction, and cleanup failures at coordinated DMRG checkpoints, so peers leave the tested root-only I/O failures together. Successful engine initializations are rolled back when another rank fails to initialize.
+
+### Changed
+
+- Bumped the package version to v1.5.8.
+- Added a [v1.5.8 roadmap](ROADMAP.md) with priorities, milestones, and release criteria for numerical regressions, runtime cleanup, MPI, and GPU validation.
+- Added a separate CPU MPI CI job for Julia 1.10 and the latest Julia 1.x, with bounded launcher and job timeouts.
+
+### Tests
+
+- Added independent dense-matrix Lanczos references for clustered and degenerate spectra, checking eigenvalue ordering, normalization, residuals, and degenerate eigenspaces in both solver modes.
+- Added spin-product-basis SU(2) references for 2x2 and 2x4 cylinders, comparing untruncated ground and excited singlet energies with both Lanczos modes.
+- Added near-zero energy/entropy convergence checks, cooldown-limit exhaustion and recovery, and density-matrix truncation tests with tied eigenvalues across three SU(2) irreps.
+- Added real JLD2 fault-injection regressions for partial initialization, initial output, sweep failures, and combined storage/engine cleanup failures, including preservation of unrelated scratch data.
+- Added isolated-process MPI ownership tests for DMRG and both MPI table builders, plus GPU-independent tests of MAGMA reference ownership using simulated C API status codes.
+- Added standalone one-rank/two-rank SU(2) comparisons for both Lanczos modes and memory/JLD2 storage, including independent ground-state correlations and excited energies. Multi-rank fault tests cover actual root-only JLD2 write failures, cleanup failure, invalid inputs, and reuse of caller-owned MPI afterward.
+
 ## v1.5.7
 
 ### Fixed

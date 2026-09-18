@@ -79,19 +79,38 @@ For each Hamiltonian application:
 
 For a ground-state solve, the `alg = :slow` mode reconstructs the target Ritz vector
 by replaying the Lanczos recurrence. The `alg = :fast` mode caches Lanczos vectors
-on the host and uses them to speed up reconstruction. Excited-state solves retain
-and fully reorthogonalize the Krylov basis to prevent duplicate (ghost) Ritz values;
-their memory use is therefore higher in either mode. If a Krylov chain ends before
-the requested excited level is reached, the solver starts another vector orthogonal
-to the retained basis. It never silently substitutes the highest available Ritz
-value for a requested level. Interior sweep cuts require the requested level;
+on the host and uses them to speed up reconstruction.
+
+Excited-state solves use several independent starting directions and a fully
+reorthogonalized block Krylov basis in either mode. The small projected Hamiltonian
+is diagonalized to obtain Ritz pairs. Independent directions allow repeated
+eigenvalues to contribute distinct states, while reorthogonalization prevents
+duplicate (ghost) Ritz values. These solves retain their basis, so their memory
+use is higher than the ground-state `:slow` mode.
+
+An excited-state solve checks the Hamiltonian residuals of the requested Ritz pair
+and all lower pairs before accepting its ordering. A small residual for one higher
+pair alone is insufficient when lower levels are still resolving a cluster.
+The solver raises an error if the basis limit is reached without convergence.
+Once that ordering is established, a supplied prediction that already satisfies
+the target residual tolerance is retained. This preserves the choice of state
+inside a degenerate eigenspace, where rotating the vector can change entanglement
+entropy even though the energy stays fixed.
+Interior sweep cuts require the requested level;
 boundary cuts may temporarily have a one-dimensional effective space and use the
 only available state while the cut moves inward.
 
-The solver checks the final Hamiltonian residual after its refinement step. If the
-requested state remains unconverged, it raises an error rather than returning an
-unchecked energy. `lanczos_maxiter` controls the Krylov basis limit and must be at
-least `target + 1`.
+The ground-state path also checks its final residual after refinement.
+`lanczos_maxiter` controls the retained Krylov basis limit and must be at least
+`target + 1`.
+
+For even-site SU(2) calculations, `target` indexes levels within the total-spin
+singlet sector. In particular, `target = 1` is the second singlet, which need not
+be the first excited energy across all spin sectors. The small-system regression
+tests construct the spin-product-basis Hamiltonian independently and project with
+the total-spin operator to compare the same sector, using open longitudinal and
+periodic transverse boundaries. At transverse width two, both periodic bonds
+between the same pair of sites are retained.
 
 ## Density Matrix Truncation
 

@@ -30,6 +30,30 @@ jobs:
       - name: Run tests
         run: julia --project=. -e 'using Pkg; Pkg.test()'
 
+  mpi:
+    name: MPI CPU integration (Julia ${{ matrix.julia-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        julia-version: ['1.10', '1']
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+      - uses: julia-actions/cache@v2
+      - name: Instantiate
+        run: |
+          julia --project=. -e 'using Pkg; Pkg.add(PackageSpec(url="https://github.com/MGYamada/MAGMA.jl.git", rev="5545b1a27ee2516d9766c6a15238f006eceb1629")); Pkg.instantiate()'
+      - name: Run MPI integration tests
+        run: julia --project=. --startup-file=no --threads=1 test/mpi_integration.jl
+
   docs:
     name: Docs
     runs-on: ubuntu-latest

@@ -41,12 +41,16 @@ end
 _dmrg_schedule_list(ms::AbstractVector) = Tuple{Int, Float64}[_dmrg_schedule(m) for m in ms]
 
 function run_DMRG(model::HeisenbergModelSU{Nc}, lat::SquareLattice, m_warmup::Union{Integer, Tuple{<:Integer, <:Real}}, m_sweep_list::AbstractVector, m_cooldown::Union{Integer, Tuple{<:Integer, <:Real}}, engine::Type{<:Engine}; kwargs...) where Nc
-    _run_DMRG(model, :square, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
+    schedules = _collective_if_active("schedule validation") do
+        (_dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown))
+    end
+    return _run_DMRG(model, :square, lat.Lx, lat.Ly, schedules..., engine; kwargs...)
 end
 
 function run_DMRG(model::HeisenbergModelSU{Nc}, lat::HoneycombLattice, m_warmup::Union{Integer, Tuple{<:Integer, <:Real}}, m_sweep_list::AbstractVector, m_cooldown::Union{Integer, Tuple{<:Integer, <:Real}}, engine::Type{<:Engine}; kwargs...) where Nc
-    if lat.BC == :ZC
-        return _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, _dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown), engine; kwargs...)
+    schedules = _collective_if_active("schedule validation") do
+        lat.BC == :ZC || throw(ArgumentError("HoneycombLattice with BC=$(lat.BC) is not supported (only :ZC)"))
+        (_dmrg_schedule(m_warmup), _dmrg_schedule_list(m_sweep_list), _dmrg_schedule(m_cooldown))
     end
-    throw(ArgumentError("HoneycombLattice with BC=$(lat.BC) is not supported (only :ZC)"))
+    return _run_DMRG(model, :honeycombZC, lat.Lx, lat.Ly, schedules..., engine; kwargs...)
 end

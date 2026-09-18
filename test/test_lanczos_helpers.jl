@@ -109,6 +109,91 @@ end
     @test val ≈ 3.0 atol = 1e-12
 end
 
+@testset "Lanczos dense references for clustered and degenerate spectra" begin
+    fixtures = (
+        (name = "clustered", levels = [-2.0, -2.0 + 1e-5, -2.0 + 3e-5, -0.25, 0.1, 2.0, 4.0, 7.0], seed = 1858, unresolved_position = 7, insufficient_maxiter = 7),
+        (name = "degenerate", levels = [-2.0, -2.0, -0.5, 0.5, 1.0, 1.0], seed = 2858, unresolved_position = 2, insufficient_maxiter = 4),
+    )
+
+    for fixture in fixtures
+        @testset "$(fixture.name)" begin
+            n = length(fixture.levels)
+            rng = MersenneTwister(fixture.seed)
+            rotation = Matrix(qr(randn(rng, n, n)).Q)
+            H = Symmetric(rotation * Diagonal(fixture.levels) * rotation')
+            reference = eigen(H)
+            # Every eigendirection is represented in the starting vector. The
+            # dense diagonalization supplies an independent ordering and basis.
+            initial_data = rotation * collect(1.0 : n)
+
+            function reference_A!(out, input)
+                out[1, 1][1] .+= H * input[1, 1][1]
+                return out
+            end
+
+            for alg in (:slow, :fast), position in 1 : n
+                @testset "$alg, position = $position" begin
+                    initial = Matrix{Vector{Matrix{Float64}}}(undef, 1, 1)
+                    initial[1, 1] = [reshape(copy(initial_data), n, 1)]
+                    # Lanczos draws a random orthogonal restart at breakdown.
+                    Random.seed!(fixture.seed + position)
+                    value = SUNDMRG.Lanczos!(reference_A!, initial, position, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = n, alg = alg)
+                    vector = vec(initial[1, 1][1])
+
+                    @test value ≈ reference.values[position] atol = 1e-10 rtol = 0
+                    @test norm(vector) ≈ 1.0 atol = 1e-12 rtol = 0
+                    @test norm(H * vector - value * vector) / max(norm(H), abs(value), 1.0) <= 1e-8
+
+                    multiplicity = findall(==(fixture.levels[position]), fixture.levels)
+                    if length(multiplicity) > 1
+                        # Degenerate eigenvectors may rotate or change sign.
+                        # Compare their projections into the whole invariant
+                        # subspace, not individual dense eigenvectors.
+                        subspace = reference.vectors[:, multiplicity]
+                        @test norm(vector - subspace * (subspace' * vector)) <= 1e-8
+                    end
+                end
+            end
+
+            for alg in (:slow, :fast)
+                initial = Matrix{Vector{Matrix{Float64}}}(undef, 1, 1)
+                initial[1, 1] = [reshape(copy(initial_data), n, 1)]
+                Random.seed!(fixture.seed)
+                # A small residual alone must not accept the wrong index when
+                # the basis budget cannot resolve lower levels or multiplicity.
+                @test_throws ErrorException SUNDMRG.Lanczos!(reference_A!, initial, fixture.unresolved_position, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = fixture.insufficient_maxiter, alg = alg)
+            end
+        end
+    end
+end
+
+@testset "Lanczos preserves a converged guess in a degenerate target space" begin
+    rng = MersenneTwister(4858)
+    rotation = Matrix(qr(randn(rng, 6, 6)).Q)
+    H = Symmetric(rotation * Diagonal([-3.0, -2.0, -2.0, 0.5, 1.0, 3.0]) * rotation')
+    guess = normalize(rotation[:, 2] + 2.0 .* rotation[:, 3])
+
+    function degenerate_A!(out, input)
+        out[1, 1][1] .+= H * input[1, 1][1]
+        return out
+    end
+
+    for alg in (:slow, :fast), seed in (1858, 2858, 3858)
+        initial = Matrix{Vector{Matrix{Float64}}}(undef, 1, 1)
+        initial[1, 1] = [reshape(copy(guess), 6, 1)]
+        Random.seed!(seed)
+        value = SUNDMRG.Lanczos!(degenerate_A!, initial, 2, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 6, alg = alg)
+        vector = vec(initial[1, 1][1])
+
+        @test value ≈ -2.0 atol = 1e-10 rtol = 0
+        @test norm(vector) ≈ 1.0 atol = 1e-12 rtol = 0
+        @test norm(H * vector - value * vector) / max(norm(H), abs(value), 1.0) <= 1e-8
+        # Selecting a new arbitrary direction at every solve changes observables
+        # such as entanglement despite an unchanged degenerate target energy.
+        @test abs(dot(vector, guess)) ≈ 1.0 atol = 1e-12 rtol = 0
+    end
+end
+
 @testset "Lanczos reports nonconvergence" begin
     rng = MersenneTwister(17)
     matrix = randn(rng, 30, 30)
@@ -121,7 +206,9 @@ end
         return out
     end
 
-    @test_throws ErrorException SUNDMRG.Lanczos!(random_A!, initial, 1, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 1)
+    for alg in (:slow, :fast)
+        @test_throws ErrorException SUNDMRG.Lanczos!(random_A!, deepcopy(initial), 1, MPI.COMM_SELF, 0, SUNDMRG.CPUEngine; maxiter = 1, alg = alg)
+    end
 end
 
 @testset "Node-local MPI context" begin

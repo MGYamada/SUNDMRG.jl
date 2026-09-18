@@ -74,12 +74,12 @@ From Julia:
 ```julia
 using SUNDMRG
 
-init_DMRG!()
+did_initialize_mpi = init_DMRG!()
 try
     make_table3nu(3, 13; manage_mpi = false)
     make_table4(3, 13; manage_mpi = false)
 finally
-    finalize_DMRG!()
+    did_initialize_mpi && finalize_DMRG!()
 end
 
 make_table(3, 13)
@@ -87,8 +87,9 @@ make_table(3, 13)
 
 MPI cannot be initialized again after it has been finalized in the same Julia
 process. Therefore, either share one externally managed MPI lifecycle as above or
-run each checked-in utility command below in a separate Julia process. Do not call
-both MPI table builders sequentially with their default `manage_mpi = true` setting.
+run each checked-in utility command below in a separate Julia process. Without
+external initialization, the first default-managed builder finalizes MPI, so a
+second builder cannot initialize it again in that process.
 
 From the checked-in utility scripts:
 
@@ -100,8 +101,11 @@ julia --project=. utils/make_table.jl 3 13
 
 When table generation is part of a larger MPI-managed Julia session, pass
 `manage_mpi = false` to the table builders after initializing MPI externally.
-When a builder owns MPI (`manage_mpi = true`), it finalizes MPI even if table
-generation or file output raises an exception.
+With `manage_mpi = true`, a builder owns MPI only if MPI was not already active.
+It finalizes that owned MPI even if an initialization hook, table calculation,
+or file output raises an exception. MPI initialized by the caller remains usable
+with either setting. If MPI cleanup also fails, the original error remains first
+in a `CompositeException` and the cleanup error is logged with its backtrace.
 
 ## Table Contents
 

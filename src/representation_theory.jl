@@ -9,6 +9,7 @@ using JLD2
 using ThreadsX
 using Permutations
 using OMEinsum
+using ..SUNDMRG: _with_cleanup
 
 export RepresentationTable,
     irrep,
@@ -82,11 +83,11 @@ function _finalize_table_mpi!(did_initialize::Bool)
 end
 
 function _with_table_mpi(f::Function, manage_mpi::Bool)
-    did_initialize_mpi = _init_table_mpi!(manage_mpi)
-    try
+    was_initialized = MPI.Initialized()
+    cleanup() = _finalize_table_mpi!(manage_mpi && !was_initialized)
+    return _with_cleanup(cleanup) do
+        _init_table_mpi!(manage_mpi)
         return f()
-    finally
-        _finalize_table_mpi!(did_initialize_mpi)
     end
 end
 

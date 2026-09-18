@@ -55,16 +55,31 @@ in the `examples/` directory.
 
 ## Testing
 
-A lightweight CPU-only unit test suite is available for pure/helper functionality
-(e.g., initialization helpers, SU helper routines, sparse vector operations, and
-small table helper checks).
+The CPU test suite covers internal helpers, SU(N) coefficients, Lanczos solves,
+and small DMRG runs. Numerical regressions use independent dense-matrix references
+for clustered/degenerate spectra and SU(2) singlet energies, and check convergence,
+cooldown limits, and density-matrix truncation across symmetry sectors.
+Runtime regressions inject storage/cleanup failures and launch separate Julia
+processes to check MPI ownership for DMRG and coefficient-table builders.
+These tests use one MPI rank and do not require GPU hardware.
 
-Run:
-```julia
-julia --project -e 'using Pkg; Pkg.test()'
+Run the ordinary suite with:
+
+```bash
+julia --project=. -e 'using Pkg; Pkg.test()'
+```
+
+The separate MPI integration suite compares one-rank and two-rank SU(2) runs,
+including independent energy/correlation references and coordinated I/O failures:
+
+```bash
+julia --project=. --startup-file=no test/mpi_integration.jl
 ```
 
 ## TODO
+
+The [v1.5.8 roadmap](ROADMAP.md) tracks the next patch release, including
+priorities and completion criteria. Longer-term feature candidates are:
 
 * Hybrid parallelization
 * Supporting the triangular lattice

@@ -37,17 +37,17 @@ function _log_phase_result(runtime::_FiniteRuntime, verbose, energy, L, ee)
 end
 
 function _save_edge_blocks!(storage, mirror, left_block, left_trmat, right_block, right_trmat, runtime::_FiniteRuntime)
-    if !isroot(runtime)
-        return nothing
+    return _collective_local(runtime, "edge block output") do
+        if isroot(runtime)
+            save_block_and_trmat!(storage, :l, left_block, left_trmat)
+            if mirror
+                save_block_and_trmat!(storage, :r, left_block, left_trmat)
+            else
+                save_block_and_trmat!(storage, :r, right_block, right_trmat)
+            end
+        end
+        nothing
     end
-
-    save_block_and_trmat!(storage, :l, left_block, left_trmat)
-    if mirror
-        save_block_and_trmat!(storage, :r, left_block, left_trmat)
-    else
-        save_block_and_trmat!(storage, :r, right_block, right_trmat)
-    end
-    return nothing
 end
 
 _worker_empty_block(len, γ_type) = Block(len, Tuple{Int, Int}[], γ_type[], Int[], Int[], ScalarDictCPU())
@@ -64,6 +64,7 @@ function _init_state(config::_FiniteRunConfig, runtime::_FiniteRuntime)
     (; engine, on_the_fly, mirror, γ_type, comm, rank, Ncpu, signfactor) = runtime
 
     storage = nothing
+    initialized = false
     m_list = Tuple{Int, Float64}[]
     errors = Float64[]
     energies = Float64[]
@@ -76,53 +77,66 @@ function _init_state(config::_FiniteRunConfig, runtime::_FiniteRuntime)
     tensor_table = Dict{Tuple{Symbol, Int, Int}, Matrix{Vector{Matrix{Float64}}}}()
     trmat_table = Dict{Tuple{Symbol, Int}, Vector{Matrix{Float64}}}()
 
-    try
-        if isroot(runtime)
-            storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR =
-                _init_root_state_edges(config, runtime, block_table, trmat_table, tensor_table, Val(Nc))
-        else
-            storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR =
-                _init_worker_state_edges(config, runtime, block_table, trmat_table, tensor_table, Val(Nc))
-        end
+    return _with_cleanup(
+        () -> begin
+            # Record ownership before constructing or saving any edge block.
+            # An edge helper may throw before it can return its other results.
+            blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR = _collective_local(runtime, "initial storage and edge construction") do
+                storage = init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
+                if isroot(runtime)
+                    _init_root_state_edges(config, runtime, Val(Nc))
+                else
+                    _init_worker_state_edges(config, runtime)
+                end
+            end
+            _save_edge_blocks!(storage, mirror, blockL, trmatL, blockR, trmatR, runtime)
 
-        blockL_enl = enlarge_block(blockL, blockL_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
-        if !mirror
-            blockR_enl = enlarge_block(blockR, blockR_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
-        else
-            blockR_enl = blockL_enl
-        end
+            blockL_enl = enlarge_block(blockL, blockL_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
+            if !mirror
+                blockR_enl = enlarge_block(blockR, blockR_tensor_dict, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
+            else
+                blockR_enl = blockL_enl
+            end
 
-        Ψ = empty_engine_tensor_matrices(engine, mirror ? 1 : 2)
-
-        return _FiniteState{Nc,typeof(storage),typeof(blockL),typeof(blockL_tensor_dict),typeof(blockR),typeof(blockR_tensor_dict),typeof(blockL_enl),typeof(blockR_enl),typeof(trmatL),typeof(trmatR),typeof(Ψ)}(
-            m_list,
-            errors,
-            energies,
-            EEs,
-            EE,
-            ES,
-            SiSj,
-            storage,
-            blockL,
-            blockL_tensor_dict,
-            blockR,
-            blockR_tensor_dict,
-            blockL_enl,
-            blockR_enl,
-            trmatL,
-            trmatR,
-            Ψ,
-        )
-    catch
-        if storage !== nothing && isroot(runtime)
-            cleanup_storage!(storage)
-        end
-        rethrow()
-    end
+            state = _collective_local(runtime, "state initialization") do
+                Ψ = empty_engine_tensor_matrices(engine, mirror ? 1 : 2)
+                _FiniteState{Nc,typeof(storage),typeof(blockL),typeof(blockL_tensor_dict),typeof(blockR),typeof(blockR_tensor_dict),typeof(blockL_enl),typeof(blockR_enl),typeof(trmatL),typeof(trmatR),typeof(Ψ)}(
+                    m_list,
+                    errors,
+                    energies,
+                    EEs,
+                    EE,
+                    ES,
+                    SiSj,
+                    storage,
+                    blockL,
+                    blockL_tensor_dict,
+                    blockR,
+                    blockR_tensor_dict,
+                    blockL_enl,
+                    blockR_enl,
+                    trmatL,
+                    trmatR,
+                    Ψ,
+                )
+            end
+            initialized = true
+            return state
+        end,
+        () -> begin
+            if !initialized
+                _collective_local(runtime, "initial storage cleanup") do
+                    if storage !== nothing && isroot(runtime)
+                        cleanup_storage!(storage)
+                    end
+                end
+            end
+        end,
+    )
 end
 
-function _init_root_state_edges(config::_FiniteRunConfig, runtime::_FiniteRuntime, block_table, trmat_table, tensor_table, ::Val{Nc}) where Nc
-    (; lattice, Lx, Ly, target, m_warmup, widthmax, fileio, scratch, verbose) = config
+function _init_root_state_edges(config::_FiniteRunConfig, runtime::_FiniteRuntime, ::Val{Nc}) where Nc
+    (; lattice, Lx, Ly, target, m_warmup, widthmax, verbose) = config
     (; engine, on_the_fly, mirror, rank) = runtime
 
     if verbose
@@ -138,7 +152,6 @@ function _init_root_state_edges(config::_FiniteRunConfig, runtime::_FiniteRuntim
         root_println(runtime, repeat("-", 60))
     end
 
-    storage = init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
     blockL = Block(0, Tuple{Int, Int}[], [trivialirrep(Val(Nc))], [1], [1], ScalarDictCPU(:H => [zeros(1, 1)]))
     blockL_tensor_dict = TensorDictCPU()
     trmatL = [to_engine_array(engine, diagm([1.0]))]
@@ -153,21 +166,17 @@ function _init_root_state_edges(config::_FiniteRunConfig, runtime::_FiniteRuntim
         trmatR = trmatL
     end
 
-    _save_edge_blocks!(storage, mirror, blockL, trmatL, blockR, trmatR, runtime)
-
     if verbose
         root_println(runtime, "#")
         root_println(runtime, "# Warming up with (m, α) = ", m_warmup)
         root_println(runtime, "#")
     end
 
-    return storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR
+    return blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR
 end
 
-function _init_worker_state_edges(config::_FiniteRunConfig, runtime::_FiniteRuntime, block_table, trmat_table, tensor_table, ::Val{Nc}) where Nc
-    (; fileio, scratch) = config
+function _init_worker_state_edges(config::_FiniteRunConfig, runtime::_FiniteRuntime)
     (; engine, mirror, γ_type, rank) = runtime
-    storage = init_internal_storage(fileio, scratch, block_table, trmat_table, tensor_table, rank)
     blockL, blockL_tensor_dict, trmatL = _worker_empty_environment(0, γ_type, engine)
 
     if !mirror
@@ -178,7 +187,7 @@ function _init_worker_state_edges(config::_FiniteRunConfig, runtime::_FiniteRunt
         trmatR = empty_engine_matrix_vector(engine)
     end
 
-    return storage, blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR
+    return blockL, blockL_tensor_dict, trmatL, blockR, blockR_tensor_dict, trmatR
 end
 
 function _warmup_phase!(state::_FiniteState{Nc}, config::_FiniteRunConfig, runtime::_FiniteRuntime) where Nc
@@ -292,14 +301,15 @@ function _load_growth_environment(state::_FiniteState, env_label, env_len, confi
     (; lattice, Ly, widthmax, tables) = config
     (; engine, comm, rank, Ncpu, on_the_fly, γ_type, signfactor) = runtime
 
-    if isroot(runtime)
-        env_block, env_trmat = load_block_and_trmat(state.storage, env_label, env_len, engine, Val(Nc))
-        env_tensor_dict = spin_operators!(state.storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
-    else
-        env_block, env_tensor_dict, env_trmat = _worker_empty_environment(env_len, γ_type, engine)
+    return _collective_local(runtime, "growth environment input") do
+        if isroot(runtime)
+            env_block, env_trmat = load_block_and_trmat(state.storage, env_label, env_len, engine, Val(Nc))
+            env_tensor_dict = spin_operators!(state.storage, env_block, env_label, Ly, widthmax, signfactor, comm, rank, Ncpu, tables, on_the_fly, engine; lattice = lattice)
+            (env_block, env_tensor_dict, env_trmat)
+        else
+            _worker_empty_environment(env_len, γ_type, engine)
+        end
     end
-
-    return env_block, env_tensor_dict, env_trmat
 end
 
 function _enlarge_growth_environment(env_block, env_tensor_dict, config::_FiniteRunConfig, runtime::_FiniteRuntime)

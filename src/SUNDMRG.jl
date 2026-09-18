@@ -6,6 +6,7 @@ using SUNRepresentations
 using CUDA
 using MAGMA
 
+include("cleanup.jl")
 include("representation_theory.jl")
 using .RepresentationTheory
 using .RepresentationTheory: SparseVector2,

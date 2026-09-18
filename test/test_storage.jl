@@ -27,6 +27,12 @@
     @test SUNDMRG.init_internal_storage(false, ".", block_table, trmat_table, tensor_table, 0) isa SUNDMRG.MemoryInternalStorage
 
     mktempdir() do scratch
+        unrelated_file = joinpath(scratch, "user-input.txt")
+        unrelated_dir = joinpath(scratch, "temp_user_workspace")
+        write(unrelated_file, "keep this input")
+        mkdir(unrelated_dir)
+        write(joinpath(unrelated_dir, "checkpoint.txt"), "keep this checkpoint")
+
         dirid = "storage_test"
         mkdir(joinpath(scratch, "temp$dirid"))
         disk_storage = SUNDMRG.JLD2InternalStorage(scratch, dirid)
@@ -48,12 +54,20 @@
 
         SUNDMRG.cleanup_storage!(disk_storage)
         @test !isdir(joinpath(scratch, "temp$dirid"))
+        @test SUNDMRG.cleanup_storage!(disk_storage) === nothing
+        @test read(unrelated_file, String) == "keep this input"
+        @test read(joinpath(unrelated_dir, "checkpoint.txt"), String) == "keep this checkpoint"
 
         initialized = SUNDMRG.init_internal_storage(true, scratch, block_table, trmat_table, tensor_table, 0)
         @test initialized isa SUNDMRG.JLD2InternalStorage
         @test isdir(joinpath(scratch, "temp$(initialized.dirid)"))
         SUNDMRG.cleanup_storage!(initialized)
         @test !isdir(joinpath(scratch, "temp$(initialized.dirid)"))
+
+        externally_removed = SUNDMRG.init_internal_storage(true, scratch, block_table, trmat_table, tensor_table, 0)
+        rm(SUNDMRG._storage_dir(externally_removed); recursive = true)
+        @test SUNDMRG.cleanup_storage!(externally_removed) === nothing
+        @test sort(readdir(scratch)) == ["temp_user_workspace", "user-input.txt"]
 
         worker_storage = SUNDMRG.init_internal_storage(true, scratch, block_table, trmat_table, tensor_table, 1)
         @test worker_storage isa SUNDMRG.JLD2InternalStorage

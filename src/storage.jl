@@ -125,7 +125,7 @@ function save_tensor(storage::JLD2InternalStorage, label, len, y, tensor)
 end
 
 function cleanup_storage!(storage::JLD2InternalStorage)
-    rm(_storage_dir(storage); recursive = true)
+    rm(_storage_dir(storage); recursive = true, force = true)
 end
 
 cleanup_storage!(::MemoryInternalStorage) = nothing
