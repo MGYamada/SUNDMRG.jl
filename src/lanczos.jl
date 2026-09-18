@@ -123,6 +123,9 @@ _alg_value(alg::Val) = alg
 
 function Lanczos!(A!::Function, initial, position, comm, rank, engine, mode::Val; maxiter = 100, allow_fewer = false)
     _validate_lanczos_request(position, maxiter, allow_fewer)
+    if position > 1
+        return _block_lanczos!(A!, initial, position, comm, rank, engine; maxiter = maxiter, allow_fewer = allow_fewer)
+    end
     ketkm1 = _zero_lanczos_vector(initial)
     initial_norm = sqrt(MPI.Allreduce(mydot(initial, initial), MPI.SUM, comm))
     isfinite(initial_norm) && initial_norm > 0.0 || throw(ArgumentError("Lanczos initial vector must have a positive finite norm"))
@@ -202,6 +205,117 @@ function Lanczos!(A!::Function, initial, position, comm, rank, engine, mode::Val
         _reconstruct_lanczos_vector_from_basis!(initial, basis, vecs, position)
     end
     _refine_lanczos_vector!(A!, initial, ketk, ketkm1, ketk1, vals[position], position, maxiter, comm, rank)
+end
+
+function _block_lanczos!(A!, initial, position, comm, rank, engine; maxiter, allow_fewer)
+    initial_norm = sqrt(MPI.Allreduce(mydot(initial, initial), MPI.SUM, comm))
+    isfinite(initial_norm) && initial_norm > 0.0 || throw(ArgumentError("Lanczos initial vector must have a positive finite norm"))
+    myrdiv!(initial, initial_norm)
+    original_guess = deepcopy(initial)
+
+    # A scalar Krylov chain represents at most one direction per degenerate
+    # level. Supply exactly position independent random directions so every seed
+    # participates in the requested Ritz block. Mix in the caller's guess without
+    # replacing a random direction or introducing an inactive extra seed.
+    basis = typeof(initial)[]
+    image = _zero_lanczos_vector(initial)
+    for seed in 1 : position
+        _restart_lanczos_chain!(image, basis, comm, engine) || break
+        if seed == 1
+            # Unequal weights prevent cancellation for an opposite-sign guess,
+            # including a one-dimensional Hilbert space.
+            myaxpy!(0.5, initial, image)
+            myrdiv!(image, sqrt(MPI.Allreduce(mydot(image, image), MPI.SUM, comm)))
+        end
+        push!(basis, deepcopy(image))
+    end
+    if length(basis) < position
+        allow_fewer || throw(ArgumentError("Lanczos requested eigenposition $position, but only $(length(basis)) eigenpairs are available"))
+        position = length(basis)
+    end
+
+    projected = zeros(maxiter, maxiter)
+    candidate = _zero_lanczos_vector(initial)
+    processed = 0
+    operator_scale = 1.0
+    while true
+        k = length(basis)
+        # Process the entire starting/expansion block before testing convergence.
+        # Raw A*q overlaps retain all couplings between independently seeded
+        # directions; a tridiagonal model would discard these couplings.
+        for j in processed + 1 : k
+            myzero!(image)
+            A!(image, basis[j])
+            image_norm = sqrt(MPI.Allreduce(mydot(image, image), MPI.SUM, comm))
+            isfinite(image_norm) || throw(ErrorException("Lanczos operator image norm is not finite"))
+            operator_scale = max(operator_scale, image_norm)
+            column = MPI.Allreduce([mydot(basis[i], image) for i in 1 : j], MPI.SUM, comm)
+            all(isfinite, column) || throw(ErrorException("Lanczos projected matrix is not finite"))
+            projected[1 : j, j] .= column
+            projected[j, 1 : j] .= column
+        end
+        vecs = rank == 0 ? eigen(Symmetric(projected[1 : k, 1 : k])).vectors : zeros(0, 0)
+        vecs = MPI.bcast(vecs, 0, comm)::Matrix{Float64}
+
+        converged = true
+        target_value = 0.0
+        worst_residual = 0.0
+        for i in 1 : position
+            # vecs has k rows, even if earlier residuals append new directions.
+            _reconstruct_lanczos_vector_from_basis!(candidate, basis, vecs, i)
+            candidate_norm = sqrt(MPI.Allreduce(mydot(candidate, candidate), MPI.SUM, comm))
+            isfinite(candidate_norm) && candidate_norm > 0.0 || throw(ErrorException("Lanczos reconstructed vector has a non-positive or non-finite norm"))
+            myrdiv!(candidate, candidate_norm)
+            myzero!(image)
+            A!(image, candidate)
+            value = MPI.Allreduce(mydot(candidate, image), MPI.SUM, comm)
+            myaxpy!(-value, candidate, image)
+            residual = sqrt(MPI.Allreduce(mydot(image, image), MPI.SUM, comm))
+            isfinite(value) && isfinite(residual) || throw(ErrorException("Lanczos residual norm is not finite"))
+            worst_residual = max(worst_residual, residual)
+            if i == position
+                target_value = value
+                mycopyto!(initial, candidate)
+            end
+            if residual > tol_Lanczos * max(operator_scale, abs(value))
+                converged = false
+                if length(basis) < maxiter
+                    _reorthogonalize_lanczos!(image, basis, comm)
+                    expansion_norm = sqrt(MPI.Allreduce(mydot(image, image), MPI.SUM, comm))
+                    # Expansion uses a roundoff threshold, below the acceptance
+                    # tolerance, so a small but unresolved cluster can still grow.
+                    if expansion_norm > eps(Float64) * operator_scale
+                        myrdiv!(image, expansion_norm)
+                        push!(basis, deepcopy(image))
+                    end
+                end
+            end
+        end
+        if converged
+            # Establish the target's ordering first. A converged caller guess
+            # then preserves a continuous choice inside a degenerate eigenspace,
+            # instead of changing its observables with each random starting block.
+            myzero!(image)
+            A!(image, original_guess)
+            guess_value = MPI.Allreduce(mydot(original_guess, image), MPI.SUM, comm)
+            myaxpy!(-target_value, original_guess, image)
+            guess_residual = sqrt(MPI.Allreduce(mydot(image, image), MPI.SUM, comm))
+            if isfinite(guess_value) && isfinite(guess_residual) && guess_residual <= tol_Lanczos * max(operator_scale, abs(target_value))
+                mycopyto!(initial, original_guess)
+                return guess_value
+            end
+            return target_value
+        end
+
+        if length(basis) == k
+            if k < maxiter && _restart_lanczos_chain!(image, basis, comm, engine)
+                push!(basis, deepcopy(image))
+            else
+                throw(ErrorException("Lanczos failed to converge eigenposition $position within $maxiter Krylov basis vectors (residual norm = $worst_residual)"))
+            end
+        end
+        processed = k
+    end
 end
 
 function _validate_lanczos_request(position, maxiter, allow_fewer = false)
