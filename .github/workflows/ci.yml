@@ -54,6 +54,28 @@ jobs:
       - name: Run MPI integration tests
         run: julia --project=. --startup-file=no --threads=1 test/mpi_integration.jl
 
+  ed:
+    name: Independent ED (Julia ${{ matrix.julia-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        julia-version: ['1.10', '1']
+    env:
+      JULIA_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+      - uses: julia-actions/cache@v2
+      - name: Prepare independent ED environment
+        run: julia --project=validation --startup-file=no validation/setup.jl
+      - name: Test block Krylov ED
+        run: julia --project=validation --startup-file=no validation/runtests.jl
+
   docs:
     name: Docs
     runs-on: ubuntu-latest
