@@ -7,7 +7,7 @@ running calculations, understanding the algorithm, and working with the
 SU(Nc) representation data used internally by the package.
 
 ```@contents
-Pages = ["usage.md", "runtime_options.md", "examples.md", "coefficient_tables.md", "dmrg_overview.md", "algorithm.md", "representation_theory.md", "su_n_examples.md", "representation_notation.md", "wigner_racah.md", "api.md"]
+Pages = ["usage.md", "runtime_options.md", "examples.md", "coefficient_tables.md", "dmrg_overview.md", "algorithm.md", "mathematical_assets.md", "representation_theory.md", "su_n_examples.md", "representation_notation.md", "wigner_racah.md", "api.md"]
 Depth = 2
 ```
 
@@ -28,6 +28,11 @@ continue to [Examples of SU(Nc) Representations](su_n_examples.md), and keep
 [Representation Labels in SUNDMRG.jl](representation_notation.md) nearby for the
 row-length convention used in package-facing labels. For the recoupling
 coefficients themselves, use [Wigner/Racah Coefficients](wigner_racah.md).
+
+If you want to maintain or reuse the mathematical implementation, start with
+[Mathematical Assets and Documentation Plan](mathematical_assets.md). It maps
+the existing routines to conventions, validation evidence, and the next notes
+to write, including SYT indexing and subduction.
 
 Use [API Reference](api.md) when you need signatures, return fields, and exported
 entry points.

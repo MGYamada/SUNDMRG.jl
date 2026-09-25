@@ -355,7 +355,59 @@ Completion: the SU(3) and honeycomb cases pass in CPU CI. Available GPU runs agr
 with CPU references within stated tolerances. Multi-node device assignment is
 claimed as verified only when a multi-node run has actually been recorded.
 
-### M5 — Documentation and Release Review (P1)
+### M5 — Mathematical Documentation and Release Review (P1)
+
+Prepare the representation-theory implementation for reuse and maintenance by
+connecting mathematical objects, conventions, code, and validation evidence.
+Start from the [mathematical assets guide](docs/src/mathematical_assets.md), and
+extend the existing representation and Wigner/Racah pages where they already
+describe the relevant convention. Preserve the runtime/release audit below.
+
+#### M5.1 — Inventory and Writing Plan
+
+- [x] Inventory representation labels and multiplicities, SYT graphs and
+  permutation actions, sparse coefficient arithmetic, subduction/gauge fixing,
+  recoupling, coefficient tables, and symmetry-resolved ED.
+- [x] Add a docs entry point with a reading order, implementation/test map, and
+  a common outline for future mathematical notes. Distinguish public interfaces
+  from internal routines and development-only utilities.
+- [x] Separate definition-based checks, independent small-system references,
+  and shared-implementation consistency checks. List documentation gaps without
+  presenting finite numerical tests as general mathematical proofs.
+
+M5.1 prepared on 2026-09-25. This is an inventory and writing scaffold; the
+detailed notes in M5.2 remain outstanding. Validation:
+`julia --project=docs --startup-file=no docs/make.jl` passed on Julia 1.13.0
+(deployment skipped). Local documentation links and all 25 source/test file
+references in the new guide were checked; `git diff --check` passed. No numerical
+code changed, so the numerical suites were not rerun for this preparation.
+
+#### M5.2 — First Mathematical Notes
+
+- [ ] Extend [representation labels](docs/src/representation_notation.md) to
+  connect normalized SU(N) labels with full L-box SYT shapes. Distinguish irrep
+  dimension, tableau count, tensor-product outer multiplicity, and retained
+  DMRG multiplets, using a small example already covered by tests.
+- [ ] Write the first SYT/indexing note: explain `multiplicity`, `SYTdiagram`,
+  `bf`, and `subdiagram`; define `V`, `E`, `D`, `B`, `F`, the graph/path ordering,
+  index origins, and integer-type assumptions. Trace a small tableau through
+  its index and an adjacent transposition, with a reproducible CPU example.
+- [ ] Document the permutation-action and sparse-arithmetic contracts: action
+  order, mutation/aliasing, normalization, amplitude pruning, and the ED path
+  that avoids pruning. State each identity's mathematical basis and link the
+  associated implementation checks.
+- [ ] Add a concise subduction contract note covering input embeddings,
+  outer-multiplicity axes, normalization, permutation options, and gauge choice.
+  Connect it to the existing [recoupling/table map](docs/src/wigner_racah.md)
+  without duplicating that map. Identify any unreviewed phase or ordering claim
+  explicitly instead of filling it in from numerical agreement alone.
+
+For v1.5.8 these notes establish conventions and worked examples for the
+existing implementation. Exhaustive derivations and a broad example catalog
+are follow-up documentation work. New public mathematical APIs, algorithm
+changes, and table regeneration are outside this documentation milestone.
+
+#### M5.3 — Runtime Documentation and Release Audit
 
 - [ ] Update [runtime options](docs/src/runtime_options.md) and
   [coefficient-table guidance](docs/src/coefficient_tables.md) with the tested
@@ -365,8 +417,11 @@ claimed as verified only when a multi-node run has actually been recorded.
 - [ ] Update [CHANGELOG.md](CHANGELOG.md) with completed changes only, and
   record validation results and any explicitly deferred hardware checks.
 
-Completion: the documentation build succeeds, commands describe the tested
-configurations, and every release claim is backed by a test or a recorded run.
+Completion: the inventory and first mathematical notes are navigable from the
+docs, their worked examples have checked outputs and stated conventions, and
+the documentation build succeeds. Commands describe tested configurations;
+every release claim is backed by a test or a recorded run. The existing M4
+hardware requirements and explicit authorization for release remain in force.
 
 ## Release Gate
 
@@ -378,7 +433,8 @@ configurations, and every release claim is backed by a test or a recorded run.
   have evidence, or the release notes explicitly record which configurations
   remain unverified because hardware was unavailable. Unverified configurations
   do not count as passed checks; a known GPU regression must be resolved.
-- [ ] M5 is complete, both Julia CI versions pass, and the docs build passes.
+- [ ] M5's mathematical inventory/first notes and runtime/release audit are
+  complete, both Julia CI versions pass, and the docs build passes.
 - [ ] Package metadata and changelog agree on v1.5.8. Remove the `Unreleased`
   label only when the release is ready; create the release tag after review.
 
