@@ -12,6 +12,7 @@ using SUNDMRG
     include("test_tables_ground_truth.jl")
     include("test_representation_theory_internal.jl")
     include("test_representation_theory_definitions.jl")
+    include("test_sun_ed.jl")
     include("test_step_helpers.jl")
     include("test_lanczos_helpers.jl")
     include("test_lanczos_multiplicity.jl")

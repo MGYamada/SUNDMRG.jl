@@ -1,0 +1,18 @@
+[deps]
+KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MAGMA = "5a482ac7-c7a4-41c3-8531-b51159abe106"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+SUNDMRG = "f5f04b14-1ee9-4d01-a958-b95a245b82cc"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+MAGMA = {url = "https://github.com/MGYamada/MAGMA.jl.git", rev = "5545b1a27ee2516d9766c6a15238f006eceb1629"}
+SUNDMRG = {path = ".."}
+
+[compat]
+KrylovKit = "0.10.4"
+MAGMA = "0.1.2"
+SUNDMRG = "1.5.8"
+julia = "1.10"

@@ -16,6 +16,8 @@
 - Bumped the package version to v1.5.8.
 - Added a [v1.5.8 roadmap](ROADMAP.md) with priorities, milestones, and release criteria for numerical regressions, runtime cleanup, MPI, and GPU validation.
 - Added a separate CPU MPI CI job for Julia 1.10 and the latest Julia 1.x, with bounded launcher and job timeouts.
+- Added a development-only SU(N) exact-diagonalization utility and design guide in `validation/`, reusing the existing SYT graph and permutation routines. It supports weighted bonds, bounded dense sector spectra, residuals, and pair correlations without pruning vector amplitudes during Hamiltonian applications or changing the public DMRG API.
+- Added an opt-in KrylovKit block Lanczos ED driver with guarded degenerate clusters, direct residual checks, bounded restarts, transition-cache and working-memory estimates, and separate setup/application/solve measurements. Its dependencies and Julia 1.10/latest CI job are isolated from the package runtime.
 
 ### Tests
 
@@ -25,6 +27,8 @@
 - Added real JLD2 fault-injection regressions for partial initialization, initial output, sweep failures, and combined storage/engine cleanup failures, including preservation of unrelated scratch data.
 - Added isolated-process MPI ownership tests for DMRG and both MPI table builders, plus GPU-independent tests of MAGMA reference ownership using simulated C API status codes.
 - Added standalone one-rank/two-rank SU(2) comparisons for both Lanczos modes and memory/JLD2 storage, including independent ground-state correlations and excited energies. Multi-rank fault tests cover actual root-only JLD2 write failures, cleanup failure, invalid inputs, and reuse of caller-owned MPI afterward.
+- Added SU(N) ED checks against independent color-product spectra and Casimir-selected singlets, including symmetric-group identities, multiplicity counts, and tiny-amplitude linearity. A six-site SU(3) square-cylinder regression compares table-backed DMRG ground/excited energies and ground-state correlations in both Lanczos modes and both storage modes.
+- Added independent block Krylov ED tests for a nine-fold degenerate projector, seed independence, restarted convergence, zero operators, and explicit failures for insufficient blocks, iteration limits, or memory budgets.
 
 ## v1.5.7
 

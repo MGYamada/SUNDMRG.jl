@@ -29,6 +29,8 @@ include("reference_su2.jl")
     @test !SUNDMRG.MPI.Finalized()
     @test init_DMRG!() == false
     try
+        include("test_sun_ed_dmrg.jl")
+
         @testset "independent SU(2) singlet energies" begin
             # A single physical bond fixes the spin normalization: singlet -3/4,
             # triplet +1/4. No package Hamiltonian or coefficient table is used.
