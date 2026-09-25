@@ -18,6 +18,7 @@
 - Added a separate CPU MPI CI job for Julia 1.10 and the latest Julia 1.x, with bounded launcher and job timeouts.
 - Added a development-only SU(N) exact-diagonalization utility and design guide in `validation/`, reusing the existing SYT graph and permutation routines. It supports weighted bonds, bounded dense sector spectra, residuals, and pair correlations without pruning vector amplitudes during Hamiltonian applications or changing the public DMRG API.
 - Added an opt-in KrylovKit block Lanczos ED driver with guarded degenerate clusters, direct residual checks, bounded restarts, transition-cache and working-memory estimates, and separate setup/application/solve measurements. Its dependencies and Julia 1.10/latest CI job are isolated from the package runtime.
+- Added a mathematical-assets documentation entry point mapping representation, SYT, subduction, recoupling, table, and ED routines to existing checks and documentation gaps. Expanded roadmap M5 with a bounded writing plan for the first mathematical notes and the existing release audit.
 
 ### Tests
 

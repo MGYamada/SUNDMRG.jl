@@ -21,6 +21,7 @@ makedocs(;
             "SUNDMRG Algorithm" => "algorithm.md",
         ],
         "SU(Nc) Symmetry" => [
+            "Mathematical Assets" => "mathematical_assets.md",
             "Representation Theory" => "representation_theory.md",
             "Representation Examples" => "su_n_examples.md",
             "Representation Labels" => "representation_notation.md",
